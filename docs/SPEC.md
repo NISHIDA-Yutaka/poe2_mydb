@@ -339,6 +339,10 @@ CREATE VIRTUAL TABLE search_fts USING fts5(id UNINDEXED, haystack, tokenize='tri
 - 実行のたびに `poe2db.sqlite` を削除して作り直す
 - 各段で**件数と訳率をログに出す**（`INFO unique: 449 件, name_ja 98.2%, stats_ja 94.3%`）。訳率が前回より落ちたら気づけるように `meta.source_counts` に残す
 - 翻訳の 3 系統（A: stat ID → `.csd` / B: trade2 英文照合 / C: 完成英文 → `.csd` テンプレ索引）と、誤訳防止の「英語再レンダリング一致検証」は DATA_PIPELINE.md §6 のとおり実装する。**§6.4 の検証は必須**
+- **系統 B の `#` 復元**: trade2 の訳は数値が `#` に潰れている（DATA_PIPELINE §6.2）。
+  `build_db._restore_values` が英文から値を戻すが、**`#` の数と英文の値の数が一致するときだけ**埋める。
+  数が合わないものは順序の対応が保証できないので `#` のまま残す。
+  これで `スキルを付与: レベル#` → `スキルを付与: レベル(1-20)` になる（実測: 残る `#` は 77 行 → 1 行）
 - `.csd` のハンドラ（`divide_by_ten_1dp_if_required` 等 ≈40 種）は `parsers.HANDLERS` として実装。未知のハンドラは例外にせず、**警告ログを出して値をそのまま使う**
 
 ### 6.1 `unique`
@@ -640,9 +644,12 @@ python search.py -k mod "chance to Ignite" --json
 | 種類 | 何が入るか | 描き方 |
 |---|---|---|
 | 効果（stat） | ユニークの mod / implicit、mod 本文、パッシブ・アセンダンシー・タイムレスの効果、ソケットの装着先別効果、ジェムの効果詳細 | `<ul class="stats">` の箇条書き。行頭に小さな四角、本文色 `#c4c8d8` |
+| implicit | ユニークの implicit（付与スキル名など） | 同じ箇条書きだが**一覧にも出す**。ゲームと同じく explicit の上に置き、丸印 + 青みがかった色 + 点線の区切りで分ける |
 | 説明文（prose） | ジェムの概要（`ShortDescription`）と説明（`Description` / サポート説明）、ソケット可能アイテムの説明 | `<p class="prose">`。左に細い罫線、1 段落として流す。色は `--dim`、やや小さめ |
 
-- 実装は `bodyLines(doc)` が `{en, ja, prose?}` を返し、`rowHTML` が `prose` の有無で
+- **ユニークの implicit は詳細を開かなくても一覧に出す**。付与スキル名（`スキルを付与: レベル(1-20) …`）は
+  ビルドを決める情報なので、隠さない
+- 実装は `bodyLines(doc)` が `{en, ja, prose?, imp?}` を返し、`rowHTML` が `prose` の有無で
   `<ul>` と `<p>` を切り替える。詳細パネルは `pairs(title, arr, prose)` の第 3 引数で同じ切り替えをする
 - 効果に付く印（石の拳の `→ 変化後`、培養の `◆`、`EN` 印）は箇条書きの項目内に置く
 - 新しい kind を足すときは、その本文がどちらなのかを必ず決めてから `bodyLines` に足す

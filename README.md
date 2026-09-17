@@ -36,6 +36,8 @@ start poe2db.html
 - 入力するたびに絞り込む（Enter 不要）。`/` で検索欄、`Esc` でクリア、`↑↓` 移動、`Enter` で詳細、`1`〜`8` で kind 切り替え
 - **結果は省略しない**。効果は全行表示し、件数も切らない（多いときは下へスクロールすると描き足す）
 - ユニークは**部位ごとの塊**で並ぶ（兜 → 鎧 → 手袋 → … → 武器）。部位名の小見出しと件数が入る
+- **効果は箇条書き、説明文は地の文**で描き分ける。ユニークの implicit（付与スキル名など）は
+  ゲームと同じく explicit の上に、区切り線つきで一覧表示する
 - **kind / 部位**のチップで絞る。テキスト無しでも一覧できる（例: ソケット × 兜）
 - **拳** トグル … 石の拳（Martial Artist の「石拳の道」）で mod がどう変化するかを併記
 - **培** トグル … 培養のオーブで置換できる行に ◆、Vaal ユニークにバッジ
@@ -75,7 +77,7 @@ python build_db.py             # poe2db.sqlite を作る。約 8 秒
 python fetch_images.py         # アイコン約 2,000 枚（60MB）。初回のみ数分
 python export_web.py           # web_data.json
 python build_web.py            # poe2db.html
-python -m pytest tests -q      # 受け入れテスト 25 本
+python -m pytest tests -q      # 受け入れテスト 27 本
 ```
 
 前提: Python 3.10+（`requests`）、Node 22+（`npx` が使えること）。

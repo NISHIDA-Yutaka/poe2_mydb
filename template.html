@@ -79,6 +79,11 @@ img.ico-sm{width:26px;height:26px;object-fit:contain;vertical-align:middle;margi
   line-height:1.5}
 .lines ul.stats li::before{content:"";position:absolute;left:3px;top:.62em;
   width:5px;height:5px;border-radius:1px;background:var(--dim2)}
+/* implicit はゲームと同じく上に置き、区切り線と印の色で explicit と分ける */
+.lines ul.stats li.imp{color:#9fb6d8}
+.lines ul.stats li.imp::before{background:#6d86ad;border-radius:50%}
+.lines ul.stats li.imp-last{padding-bottom:4px;margin-bottom:3px;
+  border-bottom:1px dashed var(--line)}
 .lines p.prose{margin:2px 0 4px;color:var(--dim);font-size:12.5px;line-height:1.6;
   padding-left:9px;border-left:2px solid var(--line)}
 mark{background:#4a3c14;color:var(--hit);padding:0 1px;border-radius:2px}
@@ -370,6 +375,14 @@ function bodyLines(d){
     for (const l of (d[F.LINES] || [])) out.push(stat(l));
     return out;
   }
+  if (k === 'unique'){
+    // implicit（付与スキルなど）もゲームと同じく explicit の上に出す
+    const out = (m.imp || []).map(l => ({...stat(l), imp: true}));
+    const n = out.length;
+    if (n) out[n - 1].lastImp = true;
+    for (const l of (d[F.LINES] || [])) out.push(stat(l));
+    return out;
+  }
   return (d[F.LINES] || []).map(stat);
 }
 
@@ -415,7 +428,9 @@ function rowHTML(d, idx){
       if (st.hw || st.open.has(d[F.ID])) extra += ` <span class="arrow-hw">→ ${hl(hwTxt)}</span>`;
     }
     if (!open){ lines += '<ul class="stats">'; open = true; }
-    lines += `<li class="${l.ja ? 'ja' : ''}">${hl(txt)}${enTag}${extra}</li>`;
+    const cls = [l.ja ? 'ja' : '', l.imp ? 'imp' : '', l.lastImp ? 'imp-last' : '']
+      .filter(Boolean).join(' ');
+    lines += `<li class="${cls}">${hl(txt)}${enTag}${extra}</li>`;
   }
   if (open) lines += '</ul>';
 

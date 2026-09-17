@@ -176,6 +176,25 @@ def test_uniques_grouped_by_slot(conn):
     assert order.index("helmet") < order.index("body_armour") < order.index("gloves")
 
 
+def test_unique_implicits_usable(conn, raw):
+    """ユニークの implicit（付与スキル名など）が一覧用データに入っていて検索できる."""
+    res = S.search(conn, "", kinds=["unique"])
+    with_imp = [d for d in res if d["meta"].get("implicits")]
+    assert len(with_imp) >= 200, len(with_imp)
+    # 付与スキルの implicit はレベル値が `#` に潰れず残っている
+    grants = [l for d in res for l in d["meta"]["implicits"]
+              if l["en"].startswith("Grants Skill")]
+    assert len(grants) >= 90, len(grants)
+    assert all("#" not in l["ja"] for l in grants if l["ja"]), \
+        [l["ja"] for l in grants if "#" in l["ja"]][:3]
+    # implicit の文言でも検索に当たる
+    assert len(S.search(conn, "スキルを付与", kinds=["unique"])) >= 50
+    # trade2 由来の `#` は全体でもほぼ残っていない
+    left = raw.execute(
+        "SELECT COUNT(*) FROM unique_lines WHERE text_ja LIKE '%#%'").fetchone()[0]
+    assert left <= 3, left
+
+
 def test_icons_present(raw):
     """アイコンのパスが主要な kind に入っている."""
     have = dict(raw.execute(

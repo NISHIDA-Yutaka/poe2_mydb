@@ -223,12 +223,36 @@ class Translator:
                 return _substitute(ja_tpl, values), "csd"
         ja = self.trade.get(key)
         if ja:
-            return ja, "trade"
+            return _restore_values(ja, line), "trade"
         return "", ""
 
 
 _PH = re.compile(r"\{(\d*)(?::[^}]*)?\}")
 _VALUE_RE = r"([+-]?\(?[+-]?[\d.]+(?:\s*-\s*[+-]?[\d.]+)?\)?)"
+_VALUE_TOKEN = re.compile(r"\(\s*[+-]?[\d.]+\s*-\s*[+-]?[\d.]+\s*\)|[+-]?\d+(?:\.\d+)?")
+
+
+def _restore_values(ja: str, en: str) -> str:
+    """trade2 由来の訳は数値が `#` に潰れているので、英文から値を戻す（§6.2）.
+
+    `#` の数と英文の値の数が一致するときだけ埋める。数が合わないものは
+    順序の対応が保証できないので `#` のままにする。
+    """
+    holes = ja.count("#")
+    if not holes:
+        return ja
+    values = _VALUE_TOKEN.findall(strip_markup(en))
+    if len(values) != holes:
+        return ja
+    out: list[str] = []
+    i = 0
+    for ch in ja:
+        if ch == "#":
+            out.append(values[i])
+            i += 1
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 def _extract_values(en_template: str, line: str) -> list[str] | None:
