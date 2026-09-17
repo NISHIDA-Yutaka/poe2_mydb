@@ -104,8 +104,19 @@ header .tabs{margin-bottom:5px}
 .ghead .cnt{color:var(--dim2);font-size:var(--fs-xs)}
 .ghead .arrow{color:var(--dim2);font-size:var(--fs-3xs);width:10px}
 
-.row{padding:6px 8px;border-radius:6px;border-left:3px solid transparent;cursor:pointer;
-  display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:start}
+.row{position:relative;padding:6px 8px;border-radius:6px;border-left:3px solid transparent;
+  cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:start}
+/* 外部リンクと編集は行の右上。リンクは常時、編集はホバー時だけ出す */
+.row .acts{position:absolute;top:5px;right:8px;display:flex;gap:5px;align-items:center}
+.row .acts a, .row .acts span{font-size:var(--fs-3xs);color:var(--dim2);text-decoration:none;
+  border:1px solid var(--line);border-radius:5px;padding:1px 7px;background:var(--panel2);
+  white-space:nowrap;line-height:1.6}
+.row .acts a:hover, .row .acts span:hover{color:var(--accent2);border-color:var(--accent2)}
+.row .acts .edit{opacity:0;cursor:pointer}
+.row:hover .acts .edit, .row.sel .acts .edit{opacity:1}
+.row .t{padding-right:150px}
+.row.edited > .t .name::after{content:"✎";color:var(--accent2);font-size:var(--fs-3xs);
+  margin-left:5px;vertical-align:super}
 .row > .ico{grid-row:span 2;align-self:start}
 img.ico{width:var(--ico);height:var(--ico);object-fit:contain;
   background:var(--ico-bg);border:1px solid var(--line);border-radius:6px;padding:3px}
@@ -139,16 +150,11 @@ img.ico-sm{width:var(--ico-sm);height:var(--ico-sm);object-fit:contain;vertical-
   padding-left:9px;border-left:2px solid var(--line)}
 mark{background:var(--mark-bg);color:var(--hit);padding:0 1px;border-radius:2px;font-weight:600}
 
-/* 詳細は元の行にぶら下がっていることが分かるよう、アイコン幅ぶん字下げする */
-.detail{position:relative;margin:4px 0 12px calc(var(--ico) + 20px);
+/* 詳細は元の行にぶら下がっていることが分かる程度に、控えめに字下げする */
+.detail{position:relative;margin:4px 0 12px 18px;
   padding:10px 14px;background:var(--panel);
   border:1px solid var(--line);border-left:3px solid var(--accent);
   border-radius:0 8px 8px 0;font-size:var(--fs-s)}
-.detail .ext{position:absolute;top:8px;right:12px;font-size:var(--fs-xs);
-  color:var(--accent2);text-decoration:none;border:1px solid var(--line);
-  border-radius:5px;padding:2px 8px;background:var(--panel2);white-space:nowrap}
-.detail .ext:hover{border-color:var(--accent2);text-decoration:underline}
-.detail h4{padding-right:120px}
 .detail h4{margin:0 0 5px;font-size:var(--fs-xs);color:var(--accent);letter-spacing:.05em}
 .detail ul.stats{margin:0;padding:0;list-style:none}
 .detail ul.stats li{position:relative;padding-left:14px;margin:1px 0;line-height:1.55}
@@ -228,6 +234,36 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
 #settings .preview .pv-name{font-weight:600}
 #settings .preview li{color:var(--stat);font-size:var(--fs-s);list-style:none;
   position:relative;padding-left:14px}
+#editor{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:51;
+  width:min(680px,94vw);max-height:88vh;overflow:auto;display:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 12px 40px rgba(0,0,0,.45);padding:16px 18px}
+#editor.on{display:block}
+#editor h3{margin:0 0 12px;font-size:var(--fs);letter-spacing:.04em}
+#editor h3 span{color:var(--dim2);font-weight:400;font-size:var(--fs-xs);margin-left:8px}
+#editor .close{position:absolute;top:10px;right:12px;cursor:pointer;color:var(--dim2);
+  font-size:var(--fs-lg);line-height:1}
+#editor .close:hover{color:var(--fg)}
+#editor .ed-row{display:grid;grid-template-columns:6.5em 1fr;gap:8px;align-items:center;
+  margin-bottom:9px}
+#editor label{color:var(--dim);font-size:var(--fs-xs)}
+#editor input[type=text]{width:100%;padding:5px 9px;font-family:inherit;font-size:var(--fs-s);
+  background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px}
+#editor input[type=text]:focus{outline:none;border-color:var(--accent)}
+#editor .ed-line{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center;
+  margin-bottom:5px}
+#editor .ed-line .src{color:var(--dim2);font-size:var(--fs-xs);line-height:1.4}
+#editor .ed-line.missing .src{color:var(--hit)}
+#editor .hdr{color:var(--accent);font-size:var(--fs-xs);margin:14px 0 6px;
+  border-top:1px solid var(--line);padding-top:10px}
+#editor .note{color:var(--dim2);font-size:var(--fs-3xs);line-height:1.6;margin-top:12px}
+#editor .note code{background:var(--panel2);padding:0 4px;border-radius:3px}
+#editor .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;
+  border-top:1px solid var(--line);padding-top:12px;flex-wrap:wrap}
+#editor .foot button{padding:5px 14px;font-family:inherit;font-size:var(--fs-xs);cursor:pointer;
+  background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px}
+#editor .foot button.primary{background:var(--accent2);border-color:var(--accent2);
+  color:var(--on-fg);font-weight:600}
 #settings .preview li::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;
   border-radius:1px;background:var(--dim2)}
 </style>
@@ -262,6 +298,30 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
 </div>
 
 <div id="overlay"></div>
+<div id="editor" role="dialog" aria-label="手直し">
+  <span class="close" data-ed="close" title="閉じる">×</span>
+  <h3>手直し <span id="ed-target"></span></h3>
+  <div class="ed-row">
+    <label for="ed-name">日本語名</label>
+    <input type="text" id="ed-name" spellcheck="false">
+  </div>
+  <div class="ed-row">
+    <label for="ed-url">poe2db.tw</label>
+    <input type="text" id="ed-url" spellcheck="false" placeholder="自動生成（空欄）／URL を直接／- でリンクを消す">
+  </div>
+  <div id="ed-lines"></div>
+  <div class="note">
+    直した内容はこのブラウザに保存されます。書き出して <code>overrides.json</code> として
+    リポジトリに置けば、作り直しても消えません。
+  </div>
+  <div class="foot">
+    <button data-ed="clear">この項目を戻す</button>
+    <button data-ed="export">書き出し</button>
+    <button data-ed="import">読み込み</button>
+    <button class="primary" data-ed="close">閉じる</button>
+  </div>
+  <input type="file" id="ed-file" accept="application/json" style="display:none">
+</div>
 <div id="settings" role="dialog" aria-label="表示設定">
   <span class="close" data-set="close" title="閉じる">×</span>
   <h3>表示設定</h3>
@@ -559,7 +619,8 @@ function slotBadges(ids){
 
 function rowHTML(d, idx){
   const m = d[F.META];
-  const name = textCell(d[F.NEN], d[F.NJA]);
+  const nm = docName(d);
+  const name = textCell(nm[0], nm[1]);
   let badges = '';
   if (d[F.GEN] || d[F.GJA]){
     const [g] = pick(d[F.GEN], d[F.GJA]);
@@ -577,8 +638,11 @@ function rowHTML(d, idx){
   let lines = '';
   const ls = bodyLines(d);
   let open = false;   // 効果は <ul> にまとめ、地の文は外に出す
+  let li = -1;
   for (const l of ls){
-    const [txt, isEn] = pick(l.en, l.ja);
+    li++;
+    const fixed = lineText(d, li, l.en, l.ja);
+    const [txt, isEn] = pick(fixed[0], fixed[1]);
     if (!txt) continue;
     const enTag = isEn ? ' <span class="badge en">EN</span>' : '';
     if (l.prose){
@@ -593,7 +657,7 @@ function rowHTML(d, idx){
       if (st.hw || st.open.has(d[F.ID])) extra += ` <span class="arrow-hw">→ ${hl(hwTxt)}</span>`;
     }
     if (!open){ lines += '<ul class="stats">'; open = true; }
-    const cls = [l.ja ? 'ja' : '', l.imp ? 'imp' : '', l.lastImp ? 'imp-last' : '']
+    const cls = [fixed[1] ? 'ja' : '', l.imp ? 'imp' : '', l.lastImp ? 'imp-last' : '']
       .filter(Boolean).join(' ');
     lines += `<li class="${cls}">${hl(txt)}${enTag}${extra}</li>`;
   }
@@ -601,8 +665,14 @@ function rowHTML(d, idx){
 
   const detail = st.open.has(d[F.ID]) ? detailHTML(d) : '';
   const ico = iconHTML(d, 'ico');
-  return `<div class="row${idx === st.sel ? ' sel' : ''}" data-id="${esc(d[F.ID])}" data-idx="${idx}">
-    ${ico || '<span></span>'}
+  const url = poe2dbURL(d);
+  const acts = `<div class="acts">`
+    + (url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"
+         title="poe2db.tw で開く">poe2db ↗</a>` : '')
+    + `<span class="edit" data-edit="${esc(d[F.ID])}" title="訳やリンクを直す">✎</span></div>`;
+  return `<div class="row${idx === st.sel ? ' sel' : ''}${editOf(d) ? ' edited' : ''}"
+      data-id="${esc(d[F.ID])}" data-idx="${idx}">
+    ${ico || '<span></span>'}${acts}
     <div class="t"><span class="name">${name}</span>${badges}${slots}</div>
     <div class="lines">${lines}</div></div>${detail}`;
 }
@@ -611,6 +681,8 @@ function rowHTML(d, idx){
    mod には個別ページが無いので付けない。 */
 const POE2DB_KINDS = new Set(['unique','gem','notable','keystone','ascendancy','socketable','timeless']);
 function poe2dbURL(d){
+  const e = edits[d[F.ID]];
+  if (e && e.u !== undefined) return e.u;   // 空文字ならリンクを出さない指定
   if (!POE2DB_KINDS.has(d[F.KIND])) return '';
   const name = d[F.NEN];
   if (!name || name.startsWith('[DNT')) return '';
@@ -618,12 +690,42 @@ function poe2dbURL(d){
   return slug ? 'https://poe2db.tw/jp/' + encodeURIComponent(slug) : '';
 }
 
+/* ------------------------------------------------------------ 手直し（編集）
+
+   訳が無い行や poe2db.tw に届かないリンクを、その場で直せるようにする。
+   直した内容は localStorage に貯まり、書き出して overrides.json として
+   リポジトリに置けば export_web.py が焼き込む（作り直しても消えない）。   */
+let edits = {};
+function loadEdits(){
+  try { edits = JSON.parse(localStorage.getItem('poe2db.edits') || '{}') || {}; }
+  catch (e) { edits = {}; }
+  // ビルドに焼き込まれた分を土台にし、手元の編集を上に重ねる
+  for (const [id, v] of Object.entries(DATA.overrides || {})){
+    edits[id] = {...v, ...(edits[id] || {})};
+  }
+}
+function saveEdits(){
+  const own = {};
+  for (const [id, v] of Object.entries(edits)){
+    const baked = (DATA.overrides || {})[id];
+    if (JSON.stringify(v) !== JSON.stringify(baked)) own[id] = v;
+  }
+  try { localStorage.setItem('poe2db.edits', JSON.stringify(own)); } catch (e) {}
+}
+const editOf = d => edits[d[F.ID]] || null;
+function docName(d){
+  const e = editOf(d);
+  return [d[F.NEN], (e && e.n) || d[F.NJA]];
+}
+function lineText(d, i, en, ja){
+  const e = editOf(d);
+  const o = e && e.l && e.l[i];
+  return [en, o || ja];
+}
+
 function detailHTML(d){
   const m = d[F.META], k = d[F.KIND];
-  const url = poe2dbURL(d);
   let h = '<div class="detail">';
-  if (url) h += `<a class="ext" href="${url}" target="_blank" rel="noopener noreferrer"
-    title="poe2db.tw で開く">poe2db.tw ↗</a>`;
   // 効果はリスト（prose=true で説明の地の文にする）
   const pairs = (title, arr, prose) => {
     if (!arr || !arr.length) return '';
@@ -1051,6 +1153,72 @@ function syncSettingsUI(){
   }
 }
 
+/* 編集ダイアログ */
+let edTarget = null;
+function openEditor(id){
+  edTarget = D.find(d => d[F.ID] === id);
+  if (!edTarget) return;
+  const d = edTarget, e = edits[id] || {};
+  document.getElementById('ed-target').textContent =
+    `${KIND_JA[d[F.KIND]] || d[F.KIND]} / ${d[F.NEN]}`;
+  document.getElementById('ed-name').value = e.n || d[F.NJA] || '';
+  document.getElementById('ed-name').placeholder = d[F.NJA] || '（訳なし）';
+  document.getElementById('ed-url').value = e.u !== undefined ? e.u : '';
+  const auto = POE2DB_KINDS.has(d[F.KIND]) ? poe2dbURL(d) : '';
+  document.getElementById('ed-url').placeholder = auto || 'このページは無し';
+
+  // 行ごとの訳。訳が無い行は印を付けて先に気付けるようにする
+  const ls = bodyLines(d);
+  let h = ls.length ? '<div class="hdr">本文（左が英語。右に訳を入れる）</div>' : '';
+  ls.forEach((l, i) => {
+    const cur = (e.l && e.l[i]) || l.ja || '';
+    h += `<div class="ed-line${l.ja ? '' : ' missing'}">
+      <div class="src">${esc(l.en)}</div>
+      <input type="text" data-line="${i}" value="${esc(cur)}"
+        placeholder="${esc(l.ja || '（訳なし）')}" spellcheck="false"></div>`;
+  });
+  document.getElementById('ed-lines').innerHTML = h;
+  document.getElementById('overlay').classList.add('on');
+  document.getElementById('editor').classList.add('on');
+}
+function closeEditor(){
+  document.getElementById('editor').classList.remove('on');
+  document.getElementById('overlay').classList.remove('on');
+  edTarget = null;
+}
+function collectEdit(){
+  if (!edTarget) return;
+  const d = edTarget, id = d[F.ID];
+  const rec = {};
+  const name = document.getElementById('ed-name').value.trim();
+  if (name && name !== d[F.NJA]) rec.n = name;
+  const url = document.getElementById('ed-url').value.trim();
+  if (url === '-') rec.u = '';                       // リンクを消す指定
+  else if (url) rec.u = url;
+  const ls = bodyLines(d), lines = {};
+  document.querySelectorAll('#ed-lines input[data-line]').forEach(inp => {
+    const i = +inp.dataset.line, v = inp.value.trim();
+    if (v && v !== (ls[i] && ls[i].ja)) lines[i] = v;
+  });
+  if (Object.keys(lines).length) rec.l = lines;
+  if (Object.keys(rec).length) edits[id] = rec; else delete edits[id];
+  saveEdits();
+  render();
+}
+function exportEdits(){
+  const own = {};
+  for (const [id, v] of Object.entries(edits)){
+    const baked = (DATA.overrides || {})[id];
+    if (JSON.stringify(v) !== JSON.stringify(baked)) own[id] = v;
+  }
+  const blob = new Blob([JSON.stringify(own, null, 1)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'overrides.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 function openSettings(on){
   document.getElementById('overlay').classList.toggle('on', on);
   document.getElementById('settings').classList.toggle('on', on);
@@ -1073,9 +1241,21 @@ document.getElementById('q').addEventListener('input', e => {
 });
 document.addEventListener('click', e => {
   // `[data-theme]` は <html> にも付くので、セレクタは #theme button に限定する
-  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],[data-set],#theme button,.row,tr.g');
+  if (e.target.closest('a[href]')) return;   // 外部リンクはそのまま開かせる
+  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],[data-set],[data-edit],[data-ed],#theme button,.row,tr.g');
   if (!t) return;
   const ds = t.dataset;
+  if (ds.edit !== undefined){ openEditor(ds.edit); return; }
+  if (ds.ed !== undefined){
+    if (ds.ed === 'close'){ collectEdit(); closeEditor(); }
+    else if (ds.ed === 'clear'){
+      if (edTarget){ delete edits[edTarget[F.ID]]; saveEdits(); const id = edTarget[F.ID];
+        closeEditor(); render(); openEditor(id); }
+    }
+    else if (ds.ed === 'export'){ collectEdit(); exportEdits(); }
+    else if (ds.ed === 'import'){ document.getElementById('ed-file').click(); }
+    return;
+  }
   if (ds.tab !== undefined){ st.tab = ds.tab; st.sel = -1;
     for (const x of document.querySelectorAll('.tab')) x.classList.toggle('on', x === t);
     return refresh(); }
@@ -1113,7 +1293,26 @@ document.addEventListener('click', e => {
     return render();
   }
 });
-document.getElementById('overlay').addEventListener('click', () => openSettings(false));
+document.getElementById('overlay').addEventListener('click', () => {
+  if (document.getElementById('editor').classList.contains('on')){ collectEdit(); closeEditor(); }
+  openSettings(false);
+});
+document.getElementById('ed-file').addEventListener('change', ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const got = JSON.parse(r.result);
+      let n = 0;
+      for (const [id, v] of Object.entries(got)){ edits[id] = v; n++; }
+      saveEdits(); render();
+      alert(`${n} 件を読み込みました。`);
+    } catch (err) { alert('JSON として読めませんでした: ' + err); }
+  };
+  r.readAsText(f);
+  ev.target.value = '';
+});
 document.getElementById('settings').addEventListener('input', e => {
   const key = e.target.dataset.set;
   if (!key) return;
@@ -1129,6 +1328,9 @@ document.addEventListener('keydown', e => {
   const inBox = document.activeElement === document.getElementById('q');
   if (e.key === '/' && !inBox){ e.preventDefault(); document.getElementById('q').focus(); return; }
   if (e.key === 'Escape'){
+    if (document.getElementById('editor').classList.contains('on')){
+      collectEdit(); closeEditor(); return;
+    }
     if (document.getElementById('settings').classList.contains('on')){
       openSettings(false); return;
     }
@@ -1156,6 +1358,7 @@ function scrollSel(){
 window.addEventListener('hashchange', () => { loadHash(); render(); });
 
 loadUI();
+loadEdits();
 loadHash();   // applyTheme() の中で applyUI() が走る
 render();
 </script>

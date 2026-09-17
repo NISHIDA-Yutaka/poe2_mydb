@@ -153,6 +153,25 @@ def trim_meta(kind: str, meta: dict, slot_label) -> dict:
     return {}
 
 
+def load_overrides() -> dict:
+    """`overrides.json`（UI の「手直し」の書き出し）を取り込む.
+
+    形: `{"unique:151": {"n": "日本語名", "u": "URL", "l": {"0": "1 行目の訳"}}}`
+    ゲームデータ側は触らず、表示に重ねるだけ。パッチを取り直しても残る。
+    """
+    path = ROOT / "overrides.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"overrides.json が読めません: {exc}")
+    if not isinstance(data, dict):
+        raise SystemExit("overrides.json は {doc_id: {...}} の形である必要があります。")
+    print(f"  overrides.json: {len(data)} 件", flush=True)
+    return data
+
+
 def main() -> None:
     if not DB_PATH.exists():
         raise SystemExit("poe2db.sqlite がありません。先に python build_db.py を実行してください。")
@@ -215,6 +234,8 @@ def main() -> None:
                          "n": {k: c[t] for k, c in tag_counts.items() if c[t]}}
                      for t in sorted({t for c in tag_counts.values() for t in c})},
         "ascendancies": ascendancies,
+        # UI の「手直し」を焼き込む。無ければ空（§ overrides.json）
+        "overrides": load_overrides(),
         # docs[12] がこの配列の添字。UI が images/<path の / を _ に>.png を組み立てる
         "icons": [p for p, _ in sorted(icons.items(), key=lambda kv: kv[1])],
         "docs": docs,
