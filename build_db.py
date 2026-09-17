@@ -689,8 +689,7 @@ class Builder:
                 ids = same_slot
         mod_id = ids[0] if ids else ""
         kind = "exact" if len(ids) == 1 else ("ambiguous" if ids else "none")
-        line = {"en": strip_markup(en), "ja": strip_markup(ja),
-                "mod_id": mod_id, "match_kind": kind}
+        line = {"en": en, "ja": ja, "mod_id": mod_id, "match_kind": kind}
         if not ids:
             return line
         # 候補が複数のときは、全候補で同じ結論になるときだけ付加情報を出す（SPEC §6.1 手順 7）
@@ -698,8 +697,7 @@ class Builder:
         for cand in ids:
             row = self.mod_rows.get(cand)
             hw = self.mod_rows.get(row["handwraps_id"]) if row and row.get("handwraps_id") else None
-            hw_texts.add((hw["id"], strip_markup(hw["text_en"]), strip_markup(hw["text_ja"]))
-                         if hw else None)
+            hw_texts.add((hw["id"], hw["text_en"], hw["text_ja"]) if hw else None)
         if len(hw_texts) == 1:
             only = next(iter(hw_texts))
             if only:
@@ -926,15 +924,15 @@ class Builder:
             active = (skill or {}).get("active_skill") or {}
             skill_id = active.get("id", "")
             a_en, a_ja = act_en.get(skill_id, {}), act_ja.get(skill_id, {})
-            summary_en = strip_markup(a_en.get("ShortDescription") or "")
-            summary_ja = strip_markup(a_ja.get("ShortDescription") or "")
-            desc_en = strip_markup(a_en.get("Description") or "")
-            desc_ja = strip_markup(a_ja.get("Description") or "")
+            summary_en = a_en.get("ShortDescription") or ""
+            summary_ja = a_ja.get("ShortDescription") or ""
+            desc_en = a_en.get("Description") or ""
+            desc_ja = a_ja.get("Description") or ""
             if not desc_en:
                 # サポートの説明は repoe 側 support_text ↔ GemEffects 英文完全一致
                 raw = g.get("support_text") or ""
-                desc_en = strip_markup(raw)
-                desc_ja = strip_markup(gem_eff.get(normalize_for_search(raw), ""))
+                desc_en = raw
+                desc_ja = gem_eff.get(normalize_for_search(raw), "")
             self.gem_icon[gid] = g.get("icon_dds_file", "")
             detail = self._gem_detail(skill)
             n_detail += len(detail)
@@ -969,7 +967,7 @@ class Builder:
                 if not text:
                     continue
                 ja, _ = self.tr.translate_rendered(text)
-                out.append({"en": strip_markup(text), "ja": strip_markup(ja)})
+                out.append({"en": text, "ja": ja})
             per = ss.get("per_level") or {}
             levels = []
             available = sorted(int(k) for k in per if str(k).isdigit())
@@ -980,8 +978,7 @@ class Builder:
                     if not text:
                         continue
                     ja, _ = self.tr.translate_rendered(text)
-                    levels.append({"lv": int(lv), "en": strip_markup(text),
-                                   "ja": strip_markup(ja)})
+                    levels.append({"lv": int(lv), "en": text, "ja": ja})
             if levels:
                 out.append({"levels": levels})
         return out
@@ -1145,18 +1142,16 @@ class Builder:
             extra = [spawn]
             if tfrom and tfrom in self.mod_rows:
                 src = self.mod_rows[tfrom]
-                meta["transforms_from"] = {"mod_id": tfrom,
-                                           "en": strip_markup(src["text_en"]),
-                                           "ja": strip_markup(src["text_ja"])}
+                meta["transforms_from"] = {"mod_id": tfrom, "en": src["text_en"],
+                                           "ja": src["text_ja"]}
                 extra += [src["text_en"], src["text_ja"]]
             if hwid and hwid in self.mod_rows:
                 hw = self.mod_rows[hwid]
-                meta["handwraps"] = {"mod_id": hwid, "en": strip_markup(hw["text_en"]),
-                                     "ja": strip_markup(hw["text_ja"])}
+                meta["handwraps"] = {"mod_id": hwid, "en": hw["text_en"],
+                                     "ja": hw["text_ja"]}
             slot_ids = S.with_parents([e["slot"] for e in applies if e["slot"]])
-            text_ja = strip_markup(text_ja)
-            add(f"mod:{mid}", "mod", sub or gen, slot_ids, strip_markup(text_en), text_ja,
-                name or "", "", [{"en": strip_markup(text_en), "ja": text_ja}], meta,
+            add(f"mod:{mid}", "mod", sub or gen, slot_ids, text_en, text_ja,
+                name or "", "", [{"en": text_en, "ja": text_ja}], meta,
                 extra_hay=extra, sort_key=lvl or 0, slot_hay=False)
 
         # socketable
@@ -1239,8 +1234,7 @@ class Builder:
             ja_paras = [x.strip() for x in (def_ja or "").split("\n") if x.strip()]
             if len(ja_paras) != len(en_paras):
                 ja_paras = ja_paras + [""] * (len(en_paras) - len(ja_paras))
-            lines = [{"en": strip_markup(e), "ja": strip_markup(j)}
-                     for e, j in zip(en_paras, ja_paras)]
+            lines = [{"en": e, "ja": j} for e, j in zip(en_paras, ja_paras)]
             add(f"keyword:{kid}", "keyword", "", [], term_en, term_ja, "", "", lines,
                 {"keyword_id": kid})
 
@@ -1285,8 +1279,8 @@ def _zip_lines(en_text: str, ja_text: str) -> list[dict]:
     ja_lines = [l for l in (ja_text or "").split("\n") if l]
     if len(ja_lines) != len(en_lines):
         ja_lines = ja_lines + [""] * (len(en_lines) - len(ja_lines))
-    return [{"en": strip_markup(e), "ja": strip_markup(j)}
-            for e, j in zip(en_lines, ja_lines)]
+    # `[Stun|スタン]` のリンク記法は残す。UI が用語解説へのリンクに変換する
+    return [{"en": e, "ja": j} for e, j in zip(en_lines, ja_lines)]
 
 
 def require_sources() -> None:

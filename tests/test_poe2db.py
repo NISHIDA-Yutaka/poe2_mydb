@@ -123,12 +123,34 @@ def test_t8_translation_coverage(raw):
     assert pct("SELECT SUM(name_ja != ''), COUNT(*) FROM socketables") >= 0.90
 
 
-def test_t9_no_untranslated_markup(raw):
-    """T9 補助: 表示用の行にマークアップが残っていない."""
-    for (lines_json,) in raw.execute("SELECT lines_json FROM search_docs LIMIT 4000"):
+def test_t9_markup_is_well_formed(raw):
+    """T9 補助: 行に残したリンク記法が壊れていない（UI が用語リンクに変える）."""
+    import re
+    ok = re.compile(r"\[([^\[\]|]+)(?:\|([^\[\]]+))?\]")
+    seen = 0
+    for (lines_json,) in raw.execute("SELECT lines_json FROM search_docs LIMIT 6000"):
         for line in json.loads(lines_json):
-            assert "[" not in line.get("ja", ""), line
-            assert "|" not in line.get("ja", ""), line
+            for text in (line.get("en", ""), line.get("ja", "")):
+                if "[" not in text:
+                    continue
+                seen += 1
+                # 記法を全て取り除いたら括弧が残らない = 対応が壊れていない
+                assert "[" not in ok.sub("", text), text
+    assert seen > 100, seen
+
+
+def test_keyword_links_resolve(raw):
+    """本文のリンクの鍵が用語解説に解決できる（99% 以上）."""
+    import re
+    kw = {r[0] for r in raw.execute("SELECT id FROM keywords")}
+    rx = re.compile(r"\[([^\[\]|]+)(?:\|[^\[\]]+)?\]")
+    hit = total = 0
+    for (text,) in raw.execute("SELECT text_en FROM mods WHERE text_en LIKE '%[%'"):
+        for m in rx.finditer(text):
+            total += 1
+            hit += m.group(1) in kw
+    assert total > 1000, total
+    assert hit / total >= 0.99, hit / total
 
 
 # --------------------------------------------------------- T10 除外ルール

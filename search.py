@@ -14,7 +14,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from parsers import Query, match_haystack, normalize_for_search, parse_query
+from parsers import (Query, match_haystack, normalize_for_search, parse_query,
+                     strip_markup)
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = ROOT / "poe2db.sqlite"
@@ -176,6 +177,8 @@ def search(conn: sqlite3.Connection, text: str = "", *, kinds=None, slots=None,
 # --------------------------------------------------------------------- CLI
 
 def pick_text(en: str, ja: str, lang: str) -> str:
+    """CLI 表示用。`[Stun|スタン]` のリンク記法はここで落とす（UI はリンクに変える）."""
+    en, ja = strip_markup(en), strip_markup(ja)
     if lang == "en":
         return en
     if lang == "both":

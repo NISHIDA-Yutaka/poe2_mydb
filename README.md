@@ -39,6 +39,9 @@ python fetch_images.py
 | タイムレス | Heroic Tragedy / Undying Hate の変化パッシブ | 77 |
 | 用語 | ゲーム内の用語解説（スタン閾値・憤怒など）。日本語 100% | 770 |
 
+**本文中の用語はクリックできる。** mod や効果の文に出てくる「回避力」「スタン」などに点線が
+引かれ、押すとゲーム内と同じ解説が出る。解説の中の用語もそのまま辿れる。
+
 ### 操作
 
 - 入力するたびに絞り込む（Enter 不要）。`/` で検索欄、`Esc` でクリア、`↑↓` 移動、`Enter` で詳細、`1`〜`9` で kind 切り替え
@@ -109,7 +112,7 @@ python fetch_data.py --force   # 外部から取得。5〜10 分。これを飛�
 python build_db.py             # poe2db.sqlite を作る。約 10 秒
 python export_web.py           # web_data.json
 python build_web.py            # poe2db.html
-python -m pytest tests -q      # 受け入れテスト 28 本
+python -m pytest tests -q      # 受け入れテスト 29 本
 ```
 
 前提: Python 3.10+（`requests`）、Node 22+（`npx` が使えること。`fetch_data.py` が使う）。

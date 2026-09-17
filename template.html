@@ -150,6 +150,20 @@ img.ico-sm{width:var(--ico-sm);height:var(--ico-sm);object-fit:contain;vertical-
   border-bottom:1px dashed var(--line)}
 .lines p.prose{margin:2px 0 4px;color:var(--dim);font-size:var(--fs-ss);line-height:1.6;
   padding-left:9px;border-left:2px solid var(--line)}
+/* 本文中の用語リンク。下線だけ控えめに引き、押すと解説が出る */
+.kw{border-bottom:1px dotted var(--dim2);cursor:help}
+.kw:hover{color:var(--accent2);border-bottom-color:var(--accent2)}
+#kwpop{position:absolute;z-index:60;display:none;width:min(420px,88vw);max-height:60vh;
+  overflow:auto;background:var(--panel);border:1px solid var(--accent2);border-radius:8px;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);padding:10px 13px;font-size:var(--fs-s)}
+#kwpop.on{display:block}
+#kwpop h4{margin:0 0 6px;font-size:var(--fs-xs);color:var(--accent);letter-spacing:.04em}
+#kwpop p{margin:0 0 7px;color:var(--dim);line-height:1.65}
+#kwpop p:last-of-type{margin-bottom:0}
+#kwpop .kwfoot{margin-top:9px;border-top:1px solid var(--line);padding-top:7px;
+  display:flex;gap:10px;font-size:var(--fs-3xs)}
+#kwpop .kwfoot span{color:var(--accent2);cursor:pointer}
+#kwpop .kwfoot span:hover{text-decoration:underline}
 mark{background:var(--mark-bg);color:var(--hit);padding:0 1px;border-radius:2px;font-weight:600}
 
 /* 詳細は元の行にぶら下がっていることが分かる程度に、控えめに字下げする */
@@ -299,6 +313,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
   <div id="out"></div>
 </div>
 
+<div id="kwpop"></div>
 <div id="overlay"></div>
 <div id="editor" role="dialog" aria-label="手直し">
   <span class="close" data-ed="close" title="閉じる">×</span>
@@ -562,6 +577,34 @@ function hl(s){
   }
   return h.replace(//g,'<mark>').replace(//g,'</mark>');
 }
+
+/* ゲームの本文には `[Stun|スタン]` というリンク記法が残っている。
+   用語解説がある鍵だけクリックできるようにし、無い鍵は表示名だけ出す。 */
+const KW = new Map();   // KeywordPopups の Id -> doc
+const KW_RE = /\[([^\[\]|]+)(?:\|([^\[\]]+))?\]/g;
+function buildKeywordIndex(){
+  for (const d of D) if (d[F.KIND] === 'keyword') KW.set(d[F.ID].slice(8), d);
+}
+/** マークアップ入りの本文を、用語リンク + ハイライト済みの HTML にする */
+function mk(text, plain){
+  const src = text || '';
+  const piece = t => plain ? esc(t) : hl(t);
+  let out = '', last = 0, m;
+  KW_RE.lastIndex = 0;
+  while ((m = KW_RE.exec(src)) !== null){
+    out += piece(src.slice(last, m.index));
+    const key = m[1], label = m[2] || m[1];
+    out += KW.has(key)
+      ? `<span class="kw" data-kw="${esc(key)}">${piece(label)}</span>`
+      : piece(label);
+    last = m.index + m[0].length;
+  }
+  return out + piece(src.slice(last));
+}
+/** マークアップを落とした素のテキスト（長さの判定や検索語の比較用） */
+function plainText(text){
+  return (text || '').replace(KW_RE, (_, k, l) => l || k);
+}
 function pick(en, ja){
   if (st.lang === 'en') return [en || ja, false];
   if (st.lang === 'both'){
@@ -573,7 +616,7 @@ function pick(en, ja){
 function textCell(en, ja){
   const [txt, isEn] = pick(en, ja);
   if (!txt) return '';
-  return hl(txt) + (isEn ? ' <span class="badge en">EN</span>' : '');
+  return mk(txt) + (isEn ? ' <span class="badge en">EN</span>' : '');
 }
 
 /* 本文の行。prose = 地の文（説明・概要）、それ以外は効果 1 つ = 1 項目のリスト。
@@ -653,19 +696,19 @@ function rowHTML(d, idx){
     const enTag = isEn ? ' <span class="badge en">EN</span>' : '';
     if (l.prose){
       if (open){ lines += '</ul>'; open = false; }
-      lines += `<p class="prose">${hl(txt)}${enTag}</p>`;
+      lines += `<p class="prose">${mk(txt)}${enTag}</p>`;
       continue;
     }
     let extra = '';
     if (st.cult && l.cult) extra += ' <span class="badge cult">◆</span>';
     if (l.hw && l.hw !== 0){
       const [hwTxt] = pick(l.hw[0], l.hw[1]);
-      if (st.hw || st.open.has(d[F.ID])) extra += ` <span class="arrow-hw">→ ${hl(hwTxt)}</span>`;
+      if (st.hw || st.open.has(d[F.ID])) extra += ` <span class="arrow-hw">→ ${mk(hwTxt)}</span>`;
     }
     if (!open){ lines += '<ul class="stats">'; open = true; }
     const cls = [fixed[1] ? 'ja' : '', l.imp ? 'imp' : '', l.lastImp ? 'imp-last' : '']
       .filter(Boolean).join(' ');
-    lines += `<li class="${cls}">${hl(txt)}${enTag}${extra}</li>`;
+    lines += `<li class="${cls}">${mk(txt)}${enTag}${extra}</li>`;
   }
   if (open) lines += '</ul>';
 
@@ -740,16 +783,16 @@ function detailHTML(d){
       for (const l of arr){
         const ja = l[1], en = l[0];
         if (!ja && !en) continue;
-        s += `<p class="prose">${esc(ja || en)}</p>`;
-        if (ja && en && ja !== en) s += `<p class="prose pair">${esc(en)}</p>`;
+        s += `<p class="prose">${mk(ja || en, 1)}</p>`;
+        if (ja && en && ja !== en) s += `<p class="prose pair">${mk(en, 1)}</p>`;
       }
       return s + '</section>';
     }
     s += '<ul class="stats">';
     for (const l of arr){
       const ja = l[1], en = l[0];
-      s += `<li>${esc(ja || en)}${ja && en && ja !== en ? ` <span class="pair">${esc(en)}</span>` : ''}`;
-      if (l[2] && l[2] !== 0) s += ` <span class="arrow-hw">→ ${esc(l[2][1] || l[2][0])}</span>`;
+      s += `<li>${mk(ja || en, 1)}${ja && en && ja !== en ? ` <span class="pair">${mk(en, 1)}</span>` : ''}`;
+      if (l[2] && l[2] !== 0) s += ` <span class="arrow-hw">→ ${mk(l[2][1] || l[2][0], 1)}</span>`;
       if (l[3]) s += ' <span class="badge cult">培養で置換可</span>';
       s += '</li>';
     }
@@ -795,7 +838,7 @@ function detailHTML(d){
     h += pairs('効果', flat);
     if (lv.length){
       h += '<section><h4>レベル別</h4>';
-      for (const l of lv) h += `<div><span class="badge">Lv${l[0]}</span> ${esc(l[2] || l[1])}${l[2] && l[1] ? ` <span class="pair">${esc(l[1])}</span>` : ''}</div>`;
+      for (const l of lv) h += `<div><span class="badge">Lv${l[0]}</span> ${mk(l[2] || l[1], 1)}${l[2] && l[1] ? ` <span class="pair">${mk(l[1], 1)}</span>` : ''}</div>`;
       h += '</section>';
     }
     if (m.tags && m.tags.length){
@@ -1159,6 +1202,36 @@ function syncSettingsUI(){
   }
 }
 
+/* 用語解説のポップアップ。解説の中の用語も辿れる */
+function showKeyword(key, anchor){
+  const d = KW.get(key);
+  const pop = document.getElementById('kwpop');
+  if (!d){ pop.classList.remove('on'); return; }
+  const [en, ja] = [d[F.NEN], d[F.NJA]];
+  const title = st.lang === 'en' ? en : (ja || en);
+  let h = `<h4>${esc(title)}${ja && en && st.lang !== 'en'
+    ? ` <span class="pair">${esc(en)}</span>` : ''}</h4>`;
+  for (const l of (d[F.LINES] || [])){
+    const [txt] = pick(l[0], l[1]);
+    if (txt) h += `<p>${mk(txt, 1)}</p>`;
+  }
+  h += `<div class="kwfoot"><span data-kwsearch="${esc(key)}">この用語だけ一覧する</span>
+    <span data-kwclose="1">閉じる</span></div>`;
+  pop.innerHTML = h;
+  pop.classList.add('on');
+  // 画面からはみ出さない位置に置く
+  const r = anchor.getBoundingClientRect();
+  const w = pop.offsetWidth, hgt = pop.offsetHeight;
+  let left = r.left + scrollX;
+  let top = r.bottom + scrollY + 6;
+  if (left + w > scrollX + innerWidth - 12) left = scrollX + innerWidth - w - 12;
+  if (left < scrollX + 8) left = scrollX + 8;
+  if (r.bottom + hgt + 20 > innerHeight) top = r.top + scrollY - hgt - 6;
+  pop.style.left = left + 'px';
+  pop.style.top = Math.max(scrollY + 4, top) + 'px';
+}
+function hideKeyword(){ document.getElementById('kwpop').classList.remove('on'); }
+
 /* 編集ダイアログ */
 let edTarget = null;
 function openEditor(id){
@@ -1179,7 +1252,7 @@ function openEditor(id){
   ls.forEach((l, i) => {
     const cur = (e.l && e.l[i]) || l.ja || '';
     h += `<div class="ed-line${l.ja ? '' : ' missing'}">
-      <div class="src">${esc(l.en)}</div>
+      <div class="src">${esc(plainText(l.en))}</div>
       <input type="text" data-line="${i}" value="${esc(cur)}"
         placeholder="${esc(l.ja || '（訳なし）')}" spellcheck="false"></div>`;
   });
@@ -1248,6 +1321,22 @@ document.getElementById('q').addEventListener('input', e => {
 document.addEventListener('click', e => {
   // `[data-theme]` は <html> にも付くので、セレクタは #theme button に限定する
   if (e.target.closest('a[href]')) return;   // 外部リンクはそのまま開かせる
+  // 用語リンク → 解説を出す。行の開閉には伝播させない
+  const kwEl = e.target.closest('.kw');
+  if (kwEl){ e.stopPropagation(); showKeyword(kwEl.dataset.kw, kwEl); return; }
+  const inPop = e.target.closest('#kwpop');
+  if (inPop){
+    const sEl = e.target.closest('[data-kwsearch]');
+    if (sEl){
+      const d = KW.get(sEl.dataset.kwsearch);
+      hideKeyword();
+      if (d){ st.kinds = new Set(['keyword']); st.q = plainText(d[F.NJA] || d[F.NEN]);
+              document.getElementById('q').value = st.q; refresh(); }
+    }
+    if (e.target.closest('[data-kwclose]')) hideKeyword();
+    return;
+  }
+  hideKeyword();
   const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],[data-set],[data-edit],[data-ed],#theme button,.row,tr.g');
   if (!t) return;
   const ds = t.dataset;
@@ -1334,6 +1423,7 @@ document.addEventListener('keydown', e => {
   const inBox = document.activeElement === document.getElementById('q');
   if (e.key === '/' && !inBox){ e.preventDefault(); document.getElementById('q').focus(); return; }
   if (e.key === 'Escape'){
+    if (document.getElementById('kwpop').classList.contains('on')){ hideKeyword(); return; }
     if (document.getElementById('editor').classList.contains('on')){
       collectEdit(); closeEditor(); return;
     }
@@ -1363,6 +1453,7 @@ function scrollSel(){
 }
 window.addEventListener('hashchange', () => { loadHash(); render(); });
 
+buildKeywordIndex();
 loadUI();
 loadEdits();
 loadHash();   // applyTheme() の中で applyUI() が走る
