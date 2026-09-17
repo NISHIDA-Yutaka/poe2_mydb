@@ -19,6 +19,7 @@
   --accent:#c8a45c; --accent2:#7aa2f7; --hit:#f0c674;
   --unique:#c8a45c; --notable:#8fd3a0; --keystone:#e8d48a; --ascendancy:#c99bf0;
   --mod:#7aa2f7; --socketable:#e59a5c; --gem:#5fd0d0; --timeless:#e57a9a;
+  --keyword:#a8b0c4;
   --stat:#c4c8d8; --imp:#9fb6d8; --imp-dot:#6d86ad;
   --shead-bg:#171922; --ico-bg:#0d0e14; --mark-bg:#4a3c14;
   --hw-bg:#3a2c18; --hw-fg:#f0c674; --hw-line:#5a4520;
@@ -32,6 +33,7 @@
   --accent:#8a6410; --accent2:#2350a8; --hit:#6b4c00;
   --unique:#8a6410; --notable:#1d6b3e; --keystone:#7a5f10; --ascendancy:#6b3a9c;
   --mod:#2350a8; --socketable:#9a5410; --gem:#146a6a; --timeless:#a52a55;
+  --keyword:#465064;
   --stat:#21252e; --imp:#28456e; --imp-dot:#5d7ba8;
   --shead-bg:#e5e9f1; --mark-bg:#ffe9a8;
   /* アイテム画像はゲーム内の暗い背景を前提に描かれているので、明テーマでも暗いまま置く */
@@ -382,7 +384,7 @@ const KINDS = [
   ['keystone','キーストーン','Keystone'],
   ['ascendancy','アセンダンシー','Ascendancy'], ['mod','mod','Mod'],
   ['socketable','ソケット','Socketable'], ['gem','ジェム','Gem'],
-  ['timeless','タイムレス','Timeless']];
+  ['timeless','タイムレス','Timeless'], ['keyword','用語','Keyword']];
 
 /* 画像: images/ の PNG を見て、無ければ ggpk.exposed に落とす（fetch_images.py と同じ規則） */
 const ICON_REMOTE = 'https://image.ggpk.exposed/poe2/Art/';
@@ -599,6 +601,10 @@ function bodyLines(d){
       out.push({en: m.desc[0], ja: m.desc[1], prose: true});
     for (const l of (d[F.LINES] || [])) out.push(stat(l));
     return out;
+  }
+  if (k === 'keyword'){
+    // 用語解説は段落。効果のリストではないので地の文で出す
+    return (d[F.LINES] || []).map(l => ({en: l[0], ja: l[1], prose: true}));
   }
   if (k === 'unique'){
     // implicit（付与スキルなど）もゲームと同じく explicit の上に出す
@@ -879,7 +885,7 @@ function renderFilters(counts){
     <span class="toggle${st.hw ? ' on' : ''}" data-toggle="hw">拳 石の拳変化</span>
     <span class="toggle${st.cult ? ' on' : ''}" data-toggle="cult">培 培養のオーブ</span>
     <span class="help">
-      <kbd>/</kbd> 検索 <kbd>Esc</kbd> クリア <kbd>↑↓</kbd> 移動 <kbd>Enter</kbd> 詳細 <kbd>1-7</kbd> kind
+      <kbd>/</kbd> 検索 <kbd>Esc</kbd> クリア <kbd>↑↓</kbd> 移動 <kbd>Enter</kbd> 詳細 <kbd>1-9</kbd> kind
     </span></div>`;
   return h;
 }
@@ -1347,7 +1353,7 @@ document.addEventListener('keydown', e => {
     const id = el.dataset.id;
     st.open.has(id) ? st.open.delete(id) : st.open.add(id);
     render(); scrollSel();
-  } else if (!inBox && /^[1-7]$/.test(e.key)){
+  } else if (!inBox && /^[1-9]$/.test(e.key)){
     toggle(st.kinds, KINDS[+e.key - 1][0]); refresh();
   }
 });

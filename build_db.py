@@ -1038,7 +1038,26 @@ class Builder:
         self.counts["timeless"] = len(rows)
         log(f"  timeless: {len(rows)}")
 
-    # ------------------------------------------------- 8. search_docs 射影
+    # --------------------------------------------------------- 8. 用語解説
+    def build_keywords(self) -> None:
+        """ゲーム内の用語解説（`[Stun]` などの説明）を取り込む."""
+        rows = []
+        for a, b in self.dat.pair("KeywordPopups"):
+            kid = a.get("Id")
+            term_en = (a.get("Term") or "").strip()
+            def_en = (a.get("Definition") or "").strip()
+            if not kid or not def_en:
+                continue   # 定義が空の行はゲーム側の未使用エントリ
+            rows.append((kid, term_en, (b.get("Term") or "").strip(),
+                         def_en.replace("\r\n", "\n"),
+                         (b.get("Definition") or "").strip().replace("\r\n", "\n")))
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO keywords VALUES (?,?,?,?,?)", rows)
+        self.counts["keywords"] = len(rows)
+        n_ja = sum(1 for r in rows if r[4])
+        log(f"  keywords: {len(rows)} (ja {n_ja / max(len(rows),1):.1%})")
+
+    # ------------------------------------------------- 9. search_docs 射影
     def build_search_docs(self) -> None:
         cur = self.conn.cursor()
         docs: list[tuple] = []
@@ -1213,6 +1232,18 @@ class Builder:
                 jewel_name, jewel_ja, lines, meta, extra_hay=[flav_en, flav_ja, jewel],
                 icon=icon)
 
+        # keyword（用語解説）。本文は段落なので prose 扱い（UI 側で地の文にする）
+        for r in cur.execute("SELECT * FROM keywords ORDER BY term_en"):
+            kid, term_en, term_ja, def_en, def_ja = r
+            en_paras = [x.strip() for x in def_en.split("\n") if x.strip()]
+            ja_paras = [x.strip() for x in (def_ja or "").split("\n") if x.strip()]
+            if len(ja_paras) != len(en_paras):
+                ja_paras = ja_paras + [""] * (len(en_paras) - len(ja_paras))
+            lines = [{"en": strip_markup(e), "ja": strip_markup(j)}
+                     for e, j in zip(en_paras, ja_paras)]
+            add(f"keyword:{kid}", "keyword", "", [], term_en, term_ja, "", "", lines,
+                {"keyword_id": kid})
+
         self.conn.executemany(
             "INSERT OR REPLACE INTO search_docs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", docs)
         self.conn.executemany(
@@ -1298,6 +1329,7 @@ def main() -> None:
     b.build_socketables()
     b.build_gems()
     b.build_timeless()
+    b.build_keywords()
     b.build_search_docs()
     b.finish()
     log(f"done in {time.time() - t0:.1f}s -> {DB_PATH}")

@@ -60,6 +60,7 @@ DAT_TABLES = [
     ("Stats", ["Id"]),
     ("Mods", ["Id"]),
     ("ClientStrings2", ["Id", "Text"]),
+    ("KeywordPopups", ["Id", "Term", "Definition"]),   # ゲーム内の用語解説
     ("SoulCores", ["BaseItemType", "RequiredLevel", "Limit", "Description", "Type",
                    "TierHigher", "IsSocketBound", "CanSocketInMartialArtistSlots",
                    "CanSocketInUniqueItems", "CanSocketInJewellery", "ExtraDescription",

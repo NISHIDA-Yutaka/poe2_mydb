@@ -25,7 +25,7 @@ python fetch_images.py
 
 これは **clone 直後（ビルド前）でも実行できる** — アイコンの一覧は `poe2db.html` から読むため。
 
-### 検索できるもの（8 種・12,552 件）
+### 検索できるもの（9 種・13,322 件）
 
 | kind | 中身 | 件数 |
 |---|---|---|
@@ -37,10 +37,11 @@ python fetch_images.py
 | ソケット | ルーン / ソウルコア。**装着先ごとの効果** | 313 |
 | ジェム | スキル / サポート / リネージュ / スピリット | 1,120 |
 | タイムレス | Heroic Tragedy / Undying Hate の変化パッシブ | 77 |
+| 用語 | ゲーム内の用語解説（スタン閾値・憤怒など）。日本語 100% | 770 |
 
 ### 操作
 
-- 入力するたびに絞り込む（Enter 不要）。`/` で検索欄、`Esc` でクリア、`↑↓` 移動、`Enter` で詳細、`1`〜`8` で kind 切り替え
+- 入力するたびに絞り込む（Enter 不要）。`/` で検索欄、`Esc` でクリア、`↑↓` 移動、`Enter` で詳細、`1`〜`9` で kind 切り替え
 - **結果は省略しない**。効果は全行表示し、件数も切らない（多いときは下へスクロールすると描き足す）
 - ユニークは**部位ごとの塊**で並ぶ（兜 → 鎧 → 手袋 → … → 武器）。部位名の小見出しと件数が入る
 - **効果は箇条書き、説明文は地の文**で描き分ける。ユニークの implicit（付与スキル名など）は
@@ -108,7 +109,7 @@ python fetch_data.py --force   # 外部から取得。5〜10 分。これを飛�
 python build_db.py             # poe2db.sqlite を作る。約 10 秒
 python export_web.py           # web_data.json
 python build_web.py            # poe2db.html
-python -m pytest tests -q      # 受け入れテスト 27 本
+python -m pytest tests -q      # 受け入れテスト 28 本
 ```
 
 前提: Python 3.10+（`requests`）、Node 22+（`npx` が使えること。`fetch_data.py` が使う）。

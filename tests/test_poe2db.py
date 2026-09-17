@@ -195,6 +195,21 @@ def test_unique_implicits_usable(conn, raw):
     assert left <= 3, left
 
 
+def test_keywords(conn, raw):
+    """ゲーム内の用語解説が日本語つきで入っている."""
+    n = raw.execute("SELECT COUNT(*) FROM keywords").fetchone()[0]
+    assert n >= 700, n
+    ja = raw.execute("SELECT COUNT(*) FROM keywords WHERE definition_ja != ''").fetchone()[0]
+    assert ja / n >= 0.99, ja / n
+    stun = raw.execute("SELECT term_ja, definition_ja FROM keywords WHERE id='Stun'").fetchone()
+    assert stun and stun[0] == "スタン閾値"
+    assert "ライトスタン" in stun[1] and "ヘビースタン" in stun[1]
+    res = S.search(conn, "スタン閾値", kinds=["keyword"])
+    assert res and any(d["name_ja"] == "スタン閾値" for d in res)
+    # 用語は横断検索にも出る
+    assert any(d["kind"] == "keyword" for d in S.search(conn, "憤怒"))
+
+
 def test_icons_present(raw):
     """アイコンのパスが主要な kind に入っている."""
     have = dict(raw.execute(

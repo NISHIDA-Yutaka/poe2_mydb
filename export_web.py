@@ -150,6 +150,9 @@ def trim_meta(kind: str, meta: dict, slot_label) -> dict:
             out["ci"] = meta["conqueror_index"]
         return out
 
+    if kind == "keyword":
+        return {}
+
     return {}
 
 

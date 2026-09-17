@@ -28,6 +28,7 @@ KIND_LABEL = {
     "socketable": ("Socketable", "ソケット"),
     "gem": ("Gem", "ジェム"),
     "timeless": ("Timeless", "タイムレス"),
+    "keyword": ("Keyword", "用語"),
 }
 KIND_ORDER = list(KIND_LABEL)
 

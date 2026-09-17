@@ -70,6 +70,11 @@ CREATE TABLE timeless_passives (
     conqueror_index INT, spawn_weight INT, stats_json TEXT, lines_json TEXT,
     flavour_en TEXT, flavour_ja TEXT, icon TEXT, jewel_name TEXT);
 
+-- kind: keyword（ゲーム内の用語解説）
+CREATE TABLE keywords (
+    id TEXT PRIMARY KEY, term_en TEXT, term_ja TEXT,
+    definition_en TEXT, definition_ja TEXT);
+
 -- 検索層
 CREATE TABLE search_docs (
     id TEXT PRIMARY KEY, kind TEXT, sub_kind TEXT, slots TEXT,
