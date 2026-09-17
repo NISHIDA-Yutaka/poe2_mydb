@@ -147,8 +147,16 @@ img.ico-sm{width:var(--ico-sm);height:var(--ico-sm);object-fit:contain;vertical-
   padding-left:9px;border-left:2px solid var(--line)}
 mark{background:var(--mark-bg);color:var(--hit);padding:0 1px;border-radius:2px;font-weight:600}
 
-.detail{margin:6px 0 10px;padding:10px 12px;background:var(--panel);
-  border:1px solid var(--line);border-radius:8px;font-size:var(--fs-s)}
+/* 詳細は元の行にぶら下がっていることが分かるよう、アイコン幅ぶん字下げする */
+.detail{position:relative;margin:4px 0 12px calc(var(--ico) + 20px);
+  padding:10px 14px;background:var(--panel);
+  border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:0 8px 8px 0;font-size:var(--fs-s)}
+.detail .ext{position:absolute;top:8px;right:12px;font-size:var(--fs-xs);
+  color:var(--accent2);text-decoration:none;border:1px solid var(--line);
+  border-radius:5px;padding:2px 8px;background:var(--panel2);white-space:nowrap}
+.detail .ext:hover{border-color:var(--accent2);text-decoration:underline}
+.detail h4{padding-right:120px}
 .detail h4{margin:0 0 5px;font-size:var(--fs-xs);color:var(--accent);letter-spacing:.05em}
 .detail ul.stats{margin:0;padding:0;list-style:none}
 .detail ul.stats li{position:relative;padding-left:14px;margin:1px 0;line-height:1.55}
@@ -607,9 +615,23 @@ function rowHTML(d, idx){
     <div class="lines">${lines}</div></div>${detail}`;
 }
 
+/* poe2db.tw のページ名は英語名から作れる（' ! . , などを落とし、空白を _ に）。
+   mod には個別ページが無いので付けない。 */
+const POE2DB_KINDS = new Set(['unique','gem','notable','keystone','ascendancy','socketable','timeless']);
+function poe2dbURL(d){
+  if (!POE2DB_KINDS.has(d[F.KIND])) return '';
+  const name = d[F.NEN];
+  if (!name || name.startsWith('[DNT')) return '';
+  const slug = name.replace(/[^0-9A-Za-z \-]/g, '').trim().replace(/\s+/g, '_').replace(/_+/g, '_');
+  return slug ? 'https://poe2db.tw/jp/' + encodeURIComponent(slug) : '';
+}
+
 function detailHTML(d){
   const m = d[F.META], k = d[F.KIND];
+  const url = poe2dbURL(d);
   let h = '<div class="detail">';
+  if (url) h += `<a class="ext" href="${url}" target="_blank" rel="noopener noreferrer"
+    title="poe2db.tw で開く">poe2db.tw ↗</a>`;
   // 効果はリスト（prose=true で説明の地の文にする）
   const pairs = (title, arr, prose) => {
     if (!arr || !arr.length) return '';
