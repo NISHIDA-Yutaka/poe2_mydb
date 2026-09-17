@@ -1,0 +1,9 @@
+data/
+datexport/
+poe2db.sqlite
+web_data.json
+fetch.log
+__pycache__/
+.pytest_cache/
+images/
+images.log

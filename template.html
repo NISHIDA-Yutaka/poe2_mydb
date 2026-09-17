@@ -1,0 +1,825 @@
+<!-- poe2db: 単一ファイル UI（docs/SPEC.md §8）。build_web.py がデータとパッチ番号を差し込む -->
+<style>
+:root{
+  --bg:#12131a; --panel:#1a1c26; --panel2:#21242f; --line:#2c3040;
+  --fg:#e6e8f0; --dim:#9aa0b4; --dim2:#6e7489;
+  --accent:#c8a45c; --accent2:#7aa2f7; --hit:#f0c674;
+  --unique:#c8a45c; --notable:#8fd3a0; --keystone:#e8d48a; --ascendancy:#c99bf0;
+  --mod:#7aa2f7; --socketable:#e59a5c; --gem:#5fd0d0; --timeless:#e57a9a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.55 "Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,system-ui,sans-serif}
+a{color:var(--accent2)}
+#app{max-width:1180px;margin:0 auto;padding:0 16px 80px}
+
+header{position:sticky;top:0;z-index:20;background:var(--bg);
+  padding:10px 0 8px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.tab{padding:5px 14px;border:1px solid var(--line);border-radius:6px 6px 0 0;
+  background:var(--panel);color:var(--dim);cursor:pointer;font-weight:600}
+.tab.on{background:var(--panel2);color:var(--fg);border-color:var(--accent)}
+.spacer{flex:1}
+.ver{color:var(--dim2);font-size:12px}
+
+.searchrow{display:flex;gap:8px;align-items:center}
+#q{flex:1;padding:9px 12px;font-size:16px;background:var(--panel);color:var(--fg);
+  border:1px solid var(--line);border-radius:6px;outline:none}
+#q:focus{border-color:var(--accent)}
+.stat{color:var(--dim2);font-size:12px;white-space:nowrap;min-width:120px;text-align:right}
+
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;align-items:center}
+.chips .lbl{color:var(--dim2);font-size:12px;margin-right:2px;min-width:38px}
+.chip{padding:3px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);
+  color:var(--dim);cursor:pointer;font-size:12px;user-select:none;white-space:nowrap}
+.chip:hover{border-color:var(--dim)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#1a1a1a;font-weight:600}
+.chip .n{opacity:.6;margin-left:4px;font-size:11px}
+.chip.mini{padding:2px 7px;font-size:11px}
+.toggle{padding:3px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+  color:var(--dim);cursor:pointer;font-size:12px;user-select:none}
+.toggle.on{background:var(--accent2);border-color:var(--accent2);color:#0d1117;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{padding:3px 10px;background:var(--panel);color:var(--dim);border:0;cursor:pointer;
+  font-size:12px;font-family:inherit}
+.seg button.on{background:var(--accent2);color:#0d1117;font-weight:600}
+
+.group{margin-top:18px}
+.shead{margin:10px 0 2px;padding:2px 8px;color:var(--dim);font-size:12px;font-weight:600;
+  letter-spacing:.04em;border-left:3px solid var(--unique);background:#171922;border-radius:0 4px 4px 0}
+.shead .cnt{color:var(--dim2);font-weight:400;margin-left:8px}
+.ghead{display:flex;align-items:center;gap:8px;cursor:pointer;
+  padding:4px 0;border-bottom:1px solid var(--line);margin-bottom:4px}
+.ghead h2{margin:0;font-size:14px;letter-spacing:.04em}
+.ghead .cnt{color:var(--dim2);font-size:12px}
+.ghead .arrow{color:var(--dim2);font-size:11px;width:10px}
+
+.row{padding:6px 8px;border-radius:6px;border-left:3px solid transparent;cursor:pointer;
+  display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:start}
+.row > .ico{grid-row:span 2}
+img.ico{width:40px;height:40px;object-fit:contain;image-rendering:auto;
+  background:#0d0e14;border:1px solid var(--line);border-radius:5px;padding:2px}
+img.ico-sm{width:26px;height:26px;object-fit:contain;vertical-align:middle;margin-right:6px}
+.row .t, .row .lines{grid-column:2}
+.row:hover{background:var(--panel)}
+.row.sel{background:var(--panel2);border-left-color:var(--accent)}
+.row .t{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.name{font-weight:600}
+.sub{color:var(--dim);font-size:12px}
+.badge{font-size:10.5px;padding:1px 6px;border-radius:4px;background:var(--panel2);
+  color:var(--dim);border:1px solid var(--line)}
+.badge.en{color:var(--dim2)}
+.badge.hw{background:#3a2c18;color:var(--hit);border-color:#5a4520}
+.badge.cult{background:#33203a;color:#e0a0f0;border-color:#54305e}
+.badge.vaal{background:#3a1f2a;color:#f090a8;border-color:#5e3040}
+/* 効果は 1 つ 1 項目のリスト、説明文は地の文。見分けが付くように差をつける */
+.lines{margin-top:3px}
+.lines ul.stats{margin:2px 0;padding:0;list-style:none}
+.lines ul.stats li{position:relative;padding-left:14px;color:#c4c8d8;font-size:13px;
+  line-height:1.5}
+.lines ul.stats li::before{content:"";position:absolute;left:3px;top:.62em;
+  width:5px;height:5px;border-radius:1px;background:var(--dim2)}
+.lines p.prose{margin:2px 0 4px;color:var(--dim);font-size:12.5px;line-height:1.6;
+  padding-left:9px;border-left:2px solid var(--line)}
+mark{background:#4a3c14;color:var(--hit);padding:0 1px;border-radius:2px}
+
+.detail{margin:6px 0 10px;padding:10px 12px;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;font-size:13px}
+.detail h4{margin:0 0 5px;font-size:12px;color:var(--accent);letter-spacing:.05em}
+.detail ul.stats{margin:0;padding:0;list-style:none}
+.detail ul.stats li{position:relative;padding-left:14px;margin:1px 0;line-height:1.55}
+.detail ul.stats li::before{content:"";position:absolute;left:3px;top:.6em;width:5px;height:5px;
+  border-radius:1px;background:var(--dim2)}
+.detail p.prose{margin:2px 0;padding-left:9px;border-left:2px solid var(--line);
+  color:var(--dim);line-height:1.65}
+.detail p.prose.pair{color:var(--dim2);font-size:12px}
+.detail section{margin-bottom:10px}
+.detail section:last-child{margin-bottom:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;color:var(--dim)}
+.kv b{color:var(--dim2);font-weight:400}
+.pair{color:var(--dim2);font-size:12px}
+.slotbtn{cursor:pointer;text-decoration:underline dotted}
+.slotbtn:hover{color:var(--accent)}
+.arrow-hw{color:var(--hit)}
+
+table.skills{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+table.skills th{text-align:left;color:var(--dim2);font-weight:600;font-size:12px;
+  border-bottom:1px solid var(--line);padding:5px 8px;cursor:pointer;white-space:nowrap}
+table.skills th.on{color:var(--accent)}
+table.skills td{padding:5px 8px;border-bottom:1px solid #20222c;vertical-align:top}
+table.skills tr.g:hover td{background:var(--panel)}
+table.skills tr.sel td{background:var(--panel2)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.c-r{background:#d05a5a}.c-g{background:#5ac07a}.c-b{background:#5a8ad0}.c-w{background:#c8c8c8}
+.tagline{color:var(--dim2);font-size:11.5px}
+.more{margin:6px 0;padding:4px 10px;font-size:12px;background:var(--panel);color:var(--dim);
+  border:1px solid var(--line);border-radius:6px;cursor:pointer;font-family:inherit}
+.empty{color:var(--dim2);padding:40px 0;text-align:center}
+.help{color:var(--dim2);font-size:11.5px;margin-top:6px}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:0 4px;
+  font-size:11px;font-family:inherit}
+</style>
+
+<div id="app">
+  <header>
+    <div class="tabs">
+      <div class="tab on" data-tab="all">横断検索</div>
+      <div class="tab" data-tab="skills">スキル</div>
+      <div class="spacer"></div>
+      <div class="seg" id="lang">
+        <button data-lang="ja" class="on">日本語</button>
+        <button data-lang="en">EN</button>
+        <button data-lang="both">両方</button>
+      </div>
+      <span class="ver">poe2db __VERSION__</span>
+    </div>
+    <div class="searchrow">
+      <input id="q" placeholder="検索（例: 憤怒 / エナジーシールド / kind:mod slot:helmet）" autocomplete="off" spellcheck="false">
+      <span class="stat" id="stat"></span>
+    </div>
+    <div id="filters"></div>
+  </header>
+  <div id="out"></div>
+</div>
+
+<script>
+const DATA = __DATA__;
+const D = DATA.docs;
+const F = {ID:0, KIND:1, SUB:2, SLOTS:3, NEN:4, NJA:5, GEN:6, GJA:7, LINES:8, META:9,
+           HAY:10, SORT:11, ICON:12};
+
+const KINDS = [
+  ['unique','ユニーク','Unique'], ['notable','ノータブル','Notable'],
+  ['keystone','キーストーン','Keystone'],
+  ['ascendancy','アセンダンシー','Ascendancy'], ['mod','mod','Mod'],
+  ['socketable','ソケット','Socketable'], ['gem','ジェム','Gem'],
+  ['timeless','タイムレス','Timeless']];
+
+/* 画像: images/ の PNG を見て、無ければ ggpk.exposed に落とす（fetch_images.py と同じ規則） */
+const ICON_REMOTE = 'https://image.ggpk.exposed/poe2/Art/';
+function iconHTML(d, cls){
+  const i = d[F.ICON];
+  if (i === undefined || i < 0) return '';
+  const p = DATA.icons[i];
+  if (!p) return '';
+  const local = 'images/' + p.replace(/\.dds$/i, '').replace(/\//g, '_') + '.png';
+  const remote = ICON_REMOTE + p + '?format=png';
+  return `<img class="${cls}" loading="lazy" src="${local}" alt=""
+    onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${remote}'}else{this.style.visibility='hidden'}">`;
+}
+const KIND_JA = Object.fromEntries(KINDS.map(k => [k[0], k[1]]));
+const MOD_SUBS = [['prefix','prefix'],['suffix','suffix'],['corrupted','corrupted'],
+  ['essence','essence'],['desecrated','desecrated'],['handwraps','石の拳'],
+  ['cultivation','培養'],['unique','ユニーク固有']];
+const GEM_SUBS = [['active','スキル'],['support','サポート'],['lineage','リネージュ'],['spirit','スピリット']];
+const HIDDEN_SORT = {active:0, support:1, lineage:2, spirit:3};
+
+const SLOT_JA = Object.fromEntries(DATA.slots.map(s => [s.id, s.ja]));
+const SLOT_EN = Object.fromEntries(DATA.slots.map(s => [s.id, s.en]));
+
+/* ------------------------------------------------------------------ state */
+const st = {tab:'all', q:'', lang:'ja', kinds:new Set(), slots:new Set(), subs:new Set(),
+  asc:new Set(), hw:false, cult:false, gemTypes:new Set(['active']), tags:new Set(),
+  color:new Set(), sort:'name', shown:0, open:new Set(), sel:-1, collapsed:new Set()};
+
+function norm(s){
+  return (s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
+}
+
+/* query syntax: AND / -exclude / "phrase" / key:value */
+const FILTER_KEYS = new Set(['kind','slot','sub','asc','hw','cult','origin','tag','gem','type','color','jewel']);
+function parseQuery(text){
+  const q = {terms:[], excl:[], filters:{}};
+  const tokens = (text||'').match(/-?(?:\w+:)?"[^"]*"|\S+/g) || [];
+  for (let tk of tokens){
+    let neg = false;
+    if (tk[0] === '-'){ neg = true; tk = tk.slice(1); }
+    const m = tk.match(/^(\w+):(.*)$/);
+    if (m && FILTER_KEYS.has(m[1].toLowerCase())){
+      const k = m[1].toLowerCase();
+      (q.filters[k] = q.filters[k] || []).push(...m[2].replace(/"/g,'').split(',').map(norm).filter(Boolean));
+      continue;
+    }
+    const v = norm(tk.replace(/"/g,''));
+    if (v) (neg ? q.excl : q.terms).push(v);
+  }
+  return q;
+}
+
+function metaTokens(d, key){
+  const m = d[F.META];
+  switch(key){
+    case 'asc': return [m.asc, ...(m.an||[]), ...(m.cl||[])].filter(Boolean).map(norm);
+    case 'origin': return [norm(m.origin||'')];
+    case 'tag': return [...(m.tags||[]), ...(m.tja||[])].map(norm);
+    case 'type': return (m.types||[]).map(norm);
+    case 'color': return [norm(m.color||'')];
+    case 'jewel': return [norm(m.jewel||'')];
+  }
+  return [];
+}
+
+function hasHW(d){
+  if (d[F.KIND] === 'mod') return !!(d[F.META].hw) || d[F.SUB] === 'handwraps';
+  const all = [...(d[F.LINES]||[]), ...((d[F.META].imp)||[])];
+  return all.some(l => l[2]);
+}
+function hasCult(d){
+  const m = d[F.META];
+  if (d[F.KIND] === 'mod') return !!m.cult || d[F.SUB] === 'cultivation';
+  return !!m.cult;
+}
+
+function passFilters(d, q){
+  const f = q.filters;
+  if (st.tab === 'skills'){
+    // スキルページは kind=gem 固定。種別・タグ（AND）・色をここで絞る
+    if (d[F.KIND] !== 'gem') return false;
+    if (st.gemTypes.size && !st.gemTypes.has(d[F.SUB])) return false;
+    if (st.color.size && !st.color.has(d[F.META].color)) return false;
+    if (st.tags.size){
+      const tags = d[F.META].tags || [];
+      for (const t of st.tags) if (!tags.includes(t)) return false;
+    }
+    return true;
+  }
+  if (st.kinds.size && !st.kinds.has(d[F.KIND])) return false;
+  if (f.kind && !f.kind.includes(d[F.KIND])) return false;
+  if (st.slots.size && !d[F.SLOTS].some(s => st.slots.has(s))) return false;
+  if (f.slot && !d[F.SLOTS].some(s => f.slot.includes(s))) return false;
+  if (st.subs.size && !st.subs.has(d[F.SUB])) return false;
+  if (f.sub && !f.sub.includes(norm(d[F.SUB]))) return false;
+  if (f.gem && (d[F.KIND] !== 'gem' || !f.gem.includes(norm(d[F.SUB])))) return false;
+  if (st.asc.size && !(d[F.KIND] === 'ascendancy' && st.asc.has(d[F.META].asc))) return false;
+  if (st.hw && !hasHW(d)) return false;
+  if (st.cult && !hasCult(d)) return false;
+  if (f.hw && (f.hw[0] === 'yes') !== hasHW(d)) return false;
+  if (f.cult && (f.cult[0] === 'yes') !== hasCult(d)) return false;
+  for (const k of ['asc','origin','type','color','jewel']){
+    if (f[k]){
+      const t = metaTokens(d, k);
+      if (!f[k].some(v => t.includes(v))) return false;
+    }
+  }
+  if (f.tag){
+    const t = metaTokens(d, 'tag');
+    if (!f.tag.every(v => t.includes(v))) return false;
+  }
+  return true;
+}
+
+function score(d, q){
+  const names = [norm(d[F.NEN]), norm(d[F.NJA])].filter(Boolean);
+  const groups = [norm(d[F.GEN]), norm(d[F.GJA])].filter(Boolean);
+  let s = 0;
+  for (const t of q.terms){
+    if (names.some(n => n === t)) s += 100;
+    else if (names.some(n => n.startsWith(t))) s += 60;
+    else if (names.some(n => n.includes(t))) s += 40;
+    else if (groups.some(g => g.includes(t))) s += 20;
+    else s += 5;
+  }
+  return s;
+}
+
+function runSearch(){
+  const t0 = performance.now();
+  const q = parseQuery(st.q);
+  const out = [];
+  for (let i = 0; i < D.length; i++){
+    const d = D[i];
+    const hay = d[F.HAY];
+    let ok = true;
+    for (const t of q.terms) if (!hay.includes(t)){ ok = false; break; }
+    if (ok) for (const e of q.excl) if (hay.includes(e)){ ok = false; break; }
+    if (!ok || !passFilters(d, q)) continue;
+    out.push(d);
+  }
+  const rank = Object.fromEntries(KINDS.map((k,n) => [k[0], n]));
+  if (q.terms.length){
+    const cache = new Map();
+    out.sort((a,b) => {
+      const ra = rank[a[F.KIND]] - rank[b[F.KIND]];
+      if (ra) return ra;
+      if (a[F.KIND] === 'unique' && a[F.SORT] !== b[F.SORT]) return a[F.SORT] - b[F.SORT];
+      let sa = cache.get(a); if (sa === undefined){ sa = score(a,q); cache.set(a,sa); }
+      let sb = cache.get(b); if (sb === undefined){ sb = score(b,q); cache.set(b,sb); }
+      if (sa !== sb) return sb - sa;
+      return a[F.SORT] - b[F.SORT] || a[F.NEN].localeCompare(b[F.NEN]);
+    });
+  } else {
+    out.sort((a,b) => (rank[a[F.KIND]] - rank[b[F.KIND]]) ||
+      (a[F.SORT] - b[F.SORT]) || a[F.NEN].localeCompare(b[F.NEN]));
+  }
+  st.ms = (performance.now() - t0).toFixed(1);
+  st.terms = q.terms;
+  return out;
+}
+
+/* ----------------------------------------------------------------- render */
+function esc(s){
+  return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function hl(s){
+  let h = esc(s);
+  if (!st.terms || !st.terms.length) return h;
+  for (const t of st.terms){
+    if (t.length < 1) continue;
+    const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+    h = h.replace(re, m => '' + m + '');
+  }
+  return h.replace(//g,'<mark>').replace(//g,'</mark>');
+}
+function pick(en, ja){
+  if (st.lang === 'en') return [en || ja, false];
+  if (st.lang === 'both'){
+    if (ja && en && ja !== en) return [ja + '  /  ' + en, false];
+    return [ja || en, !ja && !!en];
+  }
+  return ja ? [ja, false] : [en || '', !!en];
+}
+function textCell(en, ja){
+  const [txt, isEn] = pick(en, ja);
+  if (!txt) return '';
+  return hl(txt) + (isEn ? ' <span class="badge en">EN</span>' : '');
+}
+
+/* 本文の行。prose = 地の文（説明・概要）、それ以外は効果 1 つ = 1 項目のリスト。
+   見分けが付くように描き分けるので、種別をここで決める。 */
+function bodyLines(d){
+  const k = d[F.KIND], m = d[F.META];
+  const stat = l => ({en: l[0], ja: l[1], hw: l[2], cult: l[3]});
+  if (k === 'mod') return [stat([d[F.NEN], d[F.NJA]])];
+  if (k === 'gem'){
+    const out = [];
+    if (m.sum) out.push({en: m.sum[0], ja: m.sum[1], prose: true});
+    if (m.desc) out.push({en: m.desc[0], ja: m.desc[1], prose: true});
+    for (const x of (m.det || [])){
+      if (Array.isArray(x)) out.push(stat(x));
+      else if (x.lv){
+        const top = Math.max(...x.lv.map(l => l[0]));
+        for (const l of x.lv) if (l[0] === top) out.push({en: l[1], ja: l[2]});
+      }
+    }
+    return out;
+  }
+  if (k === 'socketable'){
+    const out = [];
+    if (m.desc && (m.desc[0] || m.desc[1]))
+      out.push({en: m.desc[0], ja: m.desc[1], prose: true});
+    for (const l of (d[F.LINES] || [])) out.push(stat(l));
+    return out;
+  }
+  return (d[F.LINES] || []).map(stat);
+}
+
+function slotBadges(ids){
+  return ids.filter(s => !['weapon','armour','jewellery'].includes(s))
+    .map(s => `<span class="badge slotbtn" data-slot="${s}">` +
+      esc(st.lang === 'en' ? SLOT_EN[s] : (SLOT_JA[s] || s)) + '</span>').join('');
+}
+
+function rowHTML(d, idx){
+  const m = d[F.META];
+  const name = textCell(d[F.NEN], d[F.NJA]);
+  let badges = '';
+  if (d[F.GEN] || d[F.GJA]){
+    const [g] = pick(d[F.GEN], d[F.GJA]);
+    if (g) badges += `<span class="sub">[${hl(g)}]</span>`;
+  }
+  if (d[F.KIND] === 'unique'){
+    if (m.vaal) badges += '<span class="badge vaal">Vaal</span>';
+    if (st.cult && m.cult) badges += '<span class="badge cult">培養可</span>';
+  }
+  if (d[F.KIND] === 'mod' && d[F.SUB] === 'handwraps') badges += '<span class="badge hw">石の拳</span>';
+  if (d[F.KIND] === 'mod' && m.lvl) badges += `<span class="badge">Lv${m.lvl}</span>`;
+  if (d[F.KIND] === 'gem' && m.lvl) badges += `<span class="badge">Lv${m.lvl}</span>`;
+  const slots = d[F.SLOTS].length ? slotBadges(d[F.SLOTS]) : '';
+
+  let lines = '';
+  const ls = bodyLines(d);
+  let open = false;   // 効果は <ul> にまとめ、地の文は外に出す
+  for (const l of ls){
+    const [txt, isEn] = pick(l.en, l.ja);
+    if (!txt) continue;
+    const enTag = isEn ? ' <span class="badge en">EN</span>' : '';
+    if (l.prose){
+      if (open){ lines += '</ul>'; open = false; }
+      lines += `<p class="prose">${hl(txt)}${enTag}</p>`;
+      continue;
+    }
+    let extra = '';
+    if (st.cult && l.cult) extra += ' <span class="badge cult">◆</span>';
+    if (l.hw && l.hw !== 0){
+      const [hwTxt] = pick(l.hw[0], l.hw[1]);
+      if (st.hw || st.open.has(d[F.ID])) extra += ` <span class="arrow-hw">→ ${hl(hwTxt)}</span>`;
+    }
+    if (!open){ lines += '<ul class="stats">'; open = true; }
+    lines += `<li class="${l.ja ? 'ja' : ''}">${hl(txt)}${enTag}${extra}</li>`;
+  }
+  if (open) lines += '</ul>';
+
+  const detail = st.open.has(d[F.ID]) ? detailHTML(d) : '';
+  const ico = iconHTML(d, 'ico');
+  return `<div class="row${idx === st.sel ? ' sel' : ''}" data-id="${esc(d[F.ID])}" data-idx="${idx}">
+    ${ico || '<span></span>'}
+    <div class="t"><span class="name">${name}</span>${badges}${slots}</div>
+    <div class="lines">${lines}</div></div>${detail}`;
+}
+
+function detailHTML(d){
+  const m = d[F.META], k = d[F.KIND];
+  let h = '<div class="detail">';
+  // 効果はリスト（prose=true で説明の地の文にする）
+  const pairs = (title, arr, prose) => {
+    if (!arr || !arr.length) return '';
+    let s = `<section><h4>${title}</h4>`;
+    if (prose){
+      for (const l of arr){
+        const ja = l[1], en = l[0];
+        if (!ja && !en) continue;
+        s += `<p class="prose">${esc(ja || en)}</p>`;
+        if (ja && en && ja !== en) s += `<p class="prose pair">${esc(en)}</p>`;
+      }
+      return s + '</section>';
+    }
+    s += '<ul class="stats">';
+    for (const l of arr){
+      const ja = l[1], en = l[0];
+      s += `<li>${esc(ja || en)}${ja && en && ja !== en ? ` <span class="pair">${esc(en)}</span>` : ''}`;
+      if (l[2] && l[2] !== 0) s += ` <span class="arrow-hw">→ ${esc(l[2][1] || l[2][0])}</span>`;
+      if (l[3]) s += ' <span class="badge cult">培養で置換可</span>';
+      s += '</li>';
+    }
+    return s + '</ul></section>';
+  };
+
+  if (k === 'unique'){
+    h += `<section><h4>ベース</h4><div>${esc(m.base[1] || m.base[0])} <span class="pair">${esc(m.base[0])}</span></div></section>`;
+    h += pairs('implicit', m.imp);
+    h += pairs('性能', d[F.LINES]);
+    const info = [];
+    if (m.origin) info.push(['起源', m.origin]);
+    if (m.vaal) info.push(['培養のオーブ', '対象（Vaal Unique）']);
+    if (m.alt) info.push(['別アート', 'あり']);
+    if (m.nostats) info.push(['注意', 'PoB に性能定義なし']);
+    if (info.length) h += kvSection('情報', info);
+  } else if (k === 'mod'){
+    h += pairs('本文', [[d[F.NEN], d[F.NJA]]]);
+    if (m.from) h += pairs('石の拳で変化する前', [m.from]);
+    if (m.hw) h += pairs('石の拳で変化した後', [m.hw]);
+    const ap = (m.ap || []).filter(a => a[0]);
+    if (ap.length){
+      h += '<section><h4>付く装備</h4><div>' + ap.map(a =>
+        `<span class="badge slotbtn" data-slot="${a[0]}">${esc(st.lang==='en'?SLOT_EN[a[0]]:SLOT_JA[a[0]]||a[0])}${a[1]>1?` Lv${a[1]}`:''}</span>`
+      ).join(' ') + '</div></section>';
+    } else {
+      h += '<section><h4>付く装備</h4><div class="pair">なし（ユニーク固有 / 特殊）</div></section>';
+    }
+    const info = [['生成', m.gen], ['必要レベル', String(m.lvl || 1)]];
+    if (m.grp) info.push(['グループ', m.grp]);
+    if (m.tags) info.push(['タグ', m.tags]);
+    if (m.cult) info.push(['培養のオーブ', '置換対象の元 mod']);
+    if (m.ess) info.push(['エッセンス', '専用']);
+    h += kvSection('情報', info);
+  } else if (k === 'gem'){
+    if (m.sum) h += pairs('概要', [m.sum], true);
+    if (m.desc) h += pairs('説明', [m.desc], true);
+    const flat = [], lv = [];
+    for (const x of (m.det || [])){
+      if (Array.isArray(x)) flat.push(x);
+      else if (x.lv) for (const l of x.lv) lv.push(l);
+    }
+    h += pairs('効果', flat);
+    if (lv.length){
+      h += '<section><h4>レベル別</h4>';
+      for (const l of lv) h += `<div><span class="badge">Lv${l[0]}</span> ${esc(l[2] || l[1])}${l[2] && l[1] ? ` <span class="pair">${esc(l[1])}</span>` : ''}</div>`;
+      h += '</section>';
+    }
+    if (m.tags && m.tags.length){
+      h += '<section><h4>タグ</h4><div>' + m.tags.map((t,i) =>
+        `<span class="badge slotbtn" data-tag="${esc(t)}">${esc((m.tja && m.tja[i]) || t)}</span>`).join(' ') + '</div></section>';
+    }
+    const info = [];
+    if (m.req && m.req.some(x => x)) info.push(['属性配分', `STR ${m.req[0]}% / DEX ${m.req[1]}% / INT ${m.req[2]}%`]);
+    if (m.cast) info.push(['キャスト時間', m.cast + ' ms']);
+    if (m.weap && m.weap.length) info.push(['武器制限', m.weap.join(', ')]);
+    if (m.rec && m.rec.length) info.push(['推奨サポート', m.rec.join(', ')]);
+    if (m.types && m.types.length) info.push(['内部型', m.types.join(', ')]);
+    if (info.length) h += kvSection('情報', info);
+  } else if (k === 'socketable'){
+    for (const e of (m.eff || [])){
+      const title = (e.c[1] || e.c[0] || '効果') +
+        (e.s && e.s.length ? ` <span class="pair">${e.s.filter(x=>!['weapon','armour','jewellery'].includes(x)).map(x => SLOT_JA[x]||x).join(' / ')}</span>` : '');
+      h += pairs(title, e.l);
+    }
+    if (m.desc && (m.desc[0] || m.desc[1])) h = h.replace('<div class="detail">',
+      '<div class="detail">' + pairs('説明', [m.desc], true));
+    const info = [['種別', m.type[1] || m.type[0]], ['ティア', m.tier], ['必要レベル', String(m.lvl)]];
+    if (m.limit && (m.limit[1] || m.limit[0])) info.push(['制限', m.limit[1] || m.limit[0]]);
+    if (m.flags && m.flags.unique_items) info.push(['ユニーク', '装着可']);
+    if (m.flags && m.flags.jewellery) info.push(['装飾品', '装着可']);
+    h += kvSection('情報', info);
+  } else if (k === 'timeless'){
+    h += pairs('効果', d[F.LINES]);
+    const info = [['ジュエル', m.jn[1] || m.jn[0]], ['種別', d[F.SUB]]];
+    if (m.ci) info.push(['変種', `#${m.ci}`]);
+    if (m.w) info.push(['抽選重み', String(m.w)]);
+    h += kvSection('情報', info);
+  } else {
+    h += pairs('効果', d[F.LINES]);
+    if (k === 'ascendancy'){
+      h += kvSection('情報', [['アセンダンシー', m.an[1] || m.an[0]], ['クラス', m.cl[1] || m.cl[0]]]);
+    }
+    if (m.flav && (m.flav[0] || m.flav[1])){
+      h += `<section><h4>フレーバー</h4><div class="pair">${esc(m.flav[1] || m.flav[0])}</div></section>`;
+    }
+  }
+  return h + '</div>';
+}
+function kvSection(title, pairs){
+  return `<section><h4>${title}</h4><div class="kv">` +
+    pairs.map(([k,v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join('') + '</div></section>';
+}
+
+/* ----------------------------------------------------------------- chips */
+function chipHTML(label, on, attr, n){
+  return `<span class="chip${on ? ' on' : ''}" ${attr}>${esc(label)}${n !== undefined ? `<span class="n">${n}</span>` : ''}</span>`;
+}
+
+function renderFilters(counts){
+  if (st.tab === 'skills') return renderSkillFilters();
+  let h = '<div class="chips"><span class="lbl">kind</span>';
+  h += chipHTML('全て', st.kinds.size === 0, 'data-kind="">');
+  for (const [id, ja, en] of KINDS){
+    h += chipHTML(st.lang === 'en' ? en : ja, st.kinds.has(id), `data-kind="${id}"`, counts ? (counts[id] || 0) : undefined);
+  }
+  h += '</div>';
+
+  h += '<div class="chips"><span class="lbl">部位</span>';
+  for (const s of DATA.slots){
+    if (['weapon','armour','jewellery'].includes(s.id)) continue;
+    h += chipHTML(st.lang === 'en' ? s.en : s.ja, st.slots.has(s.id), `data-slot="${s.id}"`);
+  }
+  h += chipHTML('武器', st.slots.has('weapon'), 'data-slot="weapon"');
+  h += '</div>';
+
+  const showMod = !st.kinds.size || st.kinds.has('mod');
+  const showAsc = st.kinds.has('ascendancy');
+  if (showMod){
+    h += '<div class="chips"><span class="lbl">mod</span>';
+    for (const [id, ja] of MOD_SUBS) h += chipHTML(ja, st.subs.has(id), `data-sub="${id}"`);
+    h += '</div>';
+  }
+  if (showAsc){
+    h += '<div class="chips"><span class="lbl">アセ</span>';
+    for (const a of DATA.ascendancies){
+      if (!a.en) continue;
+      h += chipHTML((st.lang === 'en' ? a.en : (a.ja || a.en)), st.asc.has(a.id), `data-asc="${a.id}"`);
+    }
+    h += '</div>';
+  }
+  h += `<div class="chips"><span class="lbl"></span>
+    <span class="toggle${st.hw ? ' on' : ''}" data-toggle="hw">拳 石の拳変化</span>
+    <span class="toggle${st.cult ? ' on' : ''}" data-toggle="cult">培 培養のオーブ</span>
+    <span class="help">
+      <kbd>/</kbd> 検索 <kbd>Esc</kbd> クリア <kbd>↑↓</kbd> 移動 <kbd>Enter</kbd> 詳細 <kbd>1-7</kbd> kind
+    </span></div>`;
+  return h;
+}
+
+function renderSkillFilters(){
+  let h = '<div class="chips"><span class="lbl">種別</span>';
+  for (const [id, ja] of GEM_SUBS) h += chipHTML(ja, st.gemTypes.has(id), `data-gemtype="${id}"`);
+  h += '<span class="lbl" style="margin-left:10px">色</span>';
+  for (const [c, ja] of [['r','赤 STR'],['g','緑 DEX'],['b','青 INT'],['w','白']])
+    h += chipHTML(ja, st.color.has(c), `data-color="${c}"`);
+  h += '</div>';
+
+  // タグ件数は「今の種別・色・検索語と、選択済みタグ」を通ったジェムから数える。
+  // 押した結果が何件になるかがそのまま出るので、ゼロ件のタグは並ばない。
+  const counts = {};
+  const q = parseQuery(st.q);
+  for (const d of D){
+    if (d[F.KIND] !== 'gem') continue;
+    if (st.gemTypes.size && !st.gemTypes.has(d[F.SUB])) continue;
+    if (st.color.size && !st.color.has(d[F.META].color)) continue;
+    const tags = d[F.META].tags || [];
+    let ok = true;
+    for (const t of st.tags) if (!tags.includes(t)){ ok = false; break; }
+    if (!ok) continue;
+    for (const t of q.terms) if (!d[F.HAY].includes(t)){ ok = false; break; }
+    if (!ok) continue;
+    for (const t of tags) counts[t] = (counts[t] || 0) + 1;
+  }
+  const tags = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+  h += '<div class="chips"><span class="lbl">タグ</span>';
+  for (const t of tags){
+    const info = DATA.gem_tags[t];
+    h += chipHTML(st.lang === 'en' ? info.en : (info.ja || info.en), st.tags.has(t), `data-tag="${t}"`, counts[t]);
+  }
+  if (st.tags.size) h += '<span class="toggle" data-toggle="cleartags">クリア</span>';
+  h += '</div>';
+  return h;
+}
+
+/* ---------------------------------------------------------------- output */
+function render(){
+  const all = runSearch();
+  const counts = {};
+  for (const d of all) counts[d[F.KIND]] = (counts[d[F.KIND]] || 0) + 1;
+  document.getElementById('filters').innerHTML = renderFilters(counts);
+  document.getElementById('stat').textContent = `${all.length} 件 / ${st.ms}ms`;
+  st.rows = all;
+
+  const out = document.getElementById('out');
+  if (st.tab === 'skills'){ out.innerHTML = renderSkills(all); return; }
+  if (!all.length){ out.innerHTML = '<div class="empty">該当なし</div>'; return; }
+
+  // 件数で切らない。多いときだけスクロールに合わせて描き足す（表示上は全件）
+  const budget = st.shown || CHUNK;
+  let h = '', idx = 0, drawn = 0, truncated = false;
+  for (const [kind, ja, en] of KINDS){
+    const docs = all.filter(d => d[F.KIND] === kind);
+    if (!docs.length) continue;
+    const collapsed = st.collapsed.has(kind);
+    h += `<div class="group"><div class="ghead" data-group="${kind}">
+      <span class="arrow">${collapsed ? '▶' : '▼'}</span>
+      <h2 style="color:var(--${kind})">${esc(st.lang === 'en' ? en : ja)}</h2>
+      <span class="cnt">${docs.length}</span></div>`;
+    if (collapsed){ idx += docs.length; h += '</div>'; continue; }
+    let lastSlot = null;
+    for (const d of docs){
+      if (drawn >= budget){ truncated = true; break; }
+      // ユニークは部位ごとの塊にして小見出しを挟む
+      if (kind === 'unique'){
+        const s0 = d[F.SLOTS][0] || '';
+        if (s0 !== lastSlot){
+          lastSlot = s0;
+          const n = docs.filter(x => (x[F.SLOTS][0] || '') === s0).length;
+          const label = s0 ? (st.lang === 'en' ? SLOT_EN[s0] : (SLOT_JA[s0] || s0)) : 'その他';
+          h += `<div class="shead">${esc(label)}<span class="cnt">${n}</span></div>`;
+        }
+      }
+      h += rowHTML(d, idx++); drawn++;
+    }
+    h += '</div>';
+    if (truncated) break;
+  }
+  if (truncated) h += `<div id="sentinel" class="empty">残り ${all.length - drawn} 件を読み込み中…</div>`;
+  out.innerHTML = h;
+  st.hasMore = truncated;
+  // 画面が埋まるまで自動で描き足す（スクロールイベントを待たない）
+  if (truncated) requestAnimationFrame(growIfNeeded);
+}
+
+/* 件数では切らない。下端に近づいたら描き足すので、表示上は常に全件 */
+const CHUNK = 1500;
+function growIfNeeded(){
+  if (!st.hasMore) return;
+  const nearBottom = innerHeight + scrollY >= document.body.scrollHeight - 1200;
+  if (!nearBottom) return;
+  st.shown = (st.shown || CHUNK) + CHUNK;
+  render();
+}
+addEventListener('scroll', growIfNeeded, {passive: true});
+addEventListener('resize', growIfNeeded, {passive: true});
+
+function renderSkills(all){
+  const gems = all.filter(d => d[F.KIND] === 'gem');
+  const cols = [['name','名前'],['color','色'],['lvl','Lv'],['tags','タグ'],['sum','概要']];
+  const sorted = gems.slice().sort((a,b) => {
+    if (st.sort === 'lvl') return (a[F.META].lvl||0) - (b[F.META].lvl||0) ||
+      a[F.NEN].localeCompare(b[F.NEN]);
+    if (st.sort === 'color') return (a[F.META].color||'').localeCompare(b[F.META].color||'') ||
+      a[F.NEN].localeCompare(b[F.NEN]);
+    return (st.lang === 'en' ? a[F.NEN] : (a[F.NJA] || a[F.NEN]))
+      .localeCompare(st.lang === 'en' ? b[F.NEN] : (b[F.NJA] || b[F.NEN]), 'ja');
+  });
+  if (!sorted.length) return '<div class="empty">該当なし</div>';
+  let h = '<table class="skills"><thead><tr>';
+  for (const [id, label] of cols)
+    h += `<th data-sort="${id}" class="${st.sort === id ? 'on' : ''}">${label}</th>`;
+  h += '</tr></thead><tbody>';
+  let idx = 0;
+  for (const d of sorted){
+    const m = d[F.META];
+    const open = st.open.has(d[F.ID]);
+    h += `<tr class="g${idx === st.sel ? ' sel' : ''}" data-id="${esc(d[F.ID])}" data-idx="${idx}">
+      <td>${iconHTML(d,'ico-sm')}<span class="name">${textCell(d[F.NEN], d[F.NJA])}</span>${m.lin ? ' <span class="badge">リネージュ</span>' : ''}</td>
+      <td><span class="dot c-${m.color || 'w'}"></span>${(m.color || '').toUpperCase()}</td>
+      <td>${m.lvl || ''}</td>
+      <td class="tagline">${(m.tags || []).map((t,i) => esc(st.lang === 'en' ? t : ((m.tja && m.tja[i]) || t))).join(' ')}</td>
+      <td>${textCell((m.sum && m.sum[0]) || (m.desc && m.desc[0]) || '', (m.sum && m.sum[1]) || (m.desc && m.desc[1]) || '')}</td></tr>`;
+    if (open) h += `<tr><td colspan="5">${detailHTML(d)}</td></tr>`;
+    idx++;
+  }
+  h += '</tbody></table>';
+  return h;
+}
+
+/* ------------------------------------------------------------------ hash */
+function saveHash(){
+  const p = new URLSearchParams();
+  if (st.q) p.set('q', st.q);
+  if (st.tab !== 'all') p.set('tab', st.tab);
+  if (st.lang !== 'ja') p.set('lang', st.lang);
+  if (st.kinds.size) p.set('kind', [...st.kinds].join(','));
+  if (st.slots.size) p.set('slot', [...st.slots].join(','));
+  if (st.subs.size) p.set('sub', [...st.subs].join(','));
+  if (st.asc.size) p.set('asc', [...st.asc].join(','));
+  if (st.tags.size) p.set('tag', [...st.tags].join(','));
+  if (st.color.size) p.set('color', [...st.color].join(','));
+  if (st.gemTypes.size !== 1 || !st.gemTypes.has('active')) p.set('gt', [...st.gemTypes].join(','));
+  if (st.hw) p.set('hw', '1');
+  if (st.cult) p.set('cult', '1');
+  if (st.sort !== 'name') p.set('sort', st.sort);
+  const s = p.toString();
+  history.replaceState(null, '', s ? '#' + s : location.pathname);
+}
+function loadHash(){
+  const p = new URLSearchParams(location.hash.slice(1));
+  st.q = p.get('q') || '';
+  st.tab = p.get('tab') || 'all';
+  st.lang = p.get('lang') || 'ja';
+  const set = (k, target) => { const v = p.get(k); if (v) target.clear(), v.split(',').forEach(x => target.add(x)); };
+  set('kind', st.kinds); set('slot', st.slots); set('sub', st.subs);
+  set('asc', st.asc); set('tag', st.tags); set('color', st.color);
+  if (p.get('gt')) set('gt', st.gemTypes);
+  st.hw = p.get('hw') === '1';
+  st.cult = p.get('cult') === '1';
+  st.sort = p.get('sort') || 'name';
+  document.getElementById('q').value = st.q;
+  for (const b of document.querySelectorAll('#lang button')) b.classList.toggle('on', b.dataset.lang === st.lang);
+  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.tab === st.tab);
+}
+
+/* ---------------------------------------------------------------- events */
+function toggle(set, v){ set.has(v) ? set.delete(v) : set.add(v); }
+function refresh(){ st.shown = CHUNK; saveHash(); render(); }
+
+document.getElementById('q').addEventListener('input', e => {
+  st.q = e.target.value; st.sel = -1;
+  clearTimeout(window._t); window._t = setTimeout(refresh, 50);
+});
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],.row,tr.g');
+  if (!t) return;
+  const ds = t.dataset;
+  if (ds.tab !== undefined){ st.tab = ds.tab; st.sel = -1;
+    for (const x of document.querySelectorAll('.tab')) x.classList.toggle('on', x === t);
+    return refresh(); }
+  if (ds.lang !== undefined){ st.lang = ds.lang;
+    for (const x of document.querySelectorAll('#lang button')) x.classList.toggle('on', x === t);
+    return refresh(); }
+  if (ds.kind !== undefined){ ds.kind === '' ? st.kinds.clear() : toggle(st.kinds, ds.kind); return refresh(); }
+  if (ds.slot !== undefined){ toggle(st.slots, ds.slot); return refresh(); }
+  if (ds.sub !== undefined){ toggle(st.subs, ds.sub); return refresh(); }
+  if (ds.asc !== undefined){ toggle(st.asc, ds.asc); return refresh(); }
+  if (ds.gemtype !== undefined){ toggle(st.gemTypes, ds.gemtype); return refresh(); }
+  if (ds.color !== undefined){ toggle(st.color, ds.color); return refresh(); }
+  if (ds.tag !== undefined){
+    if (st.tab !== 'skills'){ st.tab = 'skills';
+      for (const x of document.querySelectorAll('.tab')) x.classList.toggle('on', x.dataset.tab === 'skills'); }
+    toggle(st.tags, ds.tag); return refresh(); }
+  if (ds.sort !== undefined){ st.sort = ds.sort; return refresh(); }
+  if (ds.toggle === 'hw'){ st.hw = !st.hw; return refresh(); }
+  if (ds.toggle === 'cult'){ st.cult = !st.cult; return refresh(); }
+  if (ds.toggle === 'cleartags'){ st.tags.clear(); return refresh(); }
+  if (ds.group !== undefined){ toggle(st.collapsed, ds.group); return render(); }
+  if (ds.id !== undefined){
+    st.open.has(ds.id) ? st.open.delete(ds.id) : st.open.add(ds.id);
+    st.sel = +ds.idx;
+    return render();
+  }
+});
+document.addEventListener('keydown', e => {
+  const inBox = document.activeElement === document.getElementById('q');
+  if (e.key === '/' && !inBox){ e.preventDefault(); document.getElementById('q').focus(); return; }
+  if (e.key === 'Escape'){
+    if (inBox && st.q){ st.q = ''; document.getElementById('q').value = ''; refresh(); }
+    else document.getElementById('q').blur();
+    return;
+  }
+  if (inBox && ['ArrowDown','ArrowUp','Enter'].includes(e.key) === false) return;
+  const rows = st.tab === 'skills' ? document.querySelectorAll('tr.g') : document.querySelectorAll('.row');
+  if (e.key === 'ArrowDown'){ e.preventDefault(); st.sel = Math.min(st.sel + 1, rows.length - 1); render(); scrollSel(); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); st.sel = Math.max(st.sel - 1, 0); render(); scrollSel(); }
+  else if (e.key === 'Enter' && st.sel >= 0){
+    const el = rows[st.sel]; if (!el) return;
+    const id = el.dataset.id;
+    st.open.has(id) ? st.open.delete(id) : st.open.add(id);
+    render(); scrollSel();
+  } else if (!inBox && /^[1-7]$/.test(e.key)){
+    toggle(st.kinds, KINDS[+e.key - 1][0]); refresh();
+  }
+});
+function scrollSel(){
+  const el = document.querySelector('.row.sel, tr.sel');
+  if (el) el.scrollIntoView({block:'nearest'});
+}
+window.addEventListener('hashchange', () => { loadHash(); render(); });
+
+loadHash();
+render();
+</script>
