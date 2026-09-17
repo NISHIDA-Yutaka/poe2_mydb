@@ -1,7 +1,12 @@
-"""poe2db: アイコン画像の取得.
+"""poe2db: アイコン画像の取得（任意）.
 
     python fetch_images.py          # 未取得のものだけ
     python fetch_images.py --force  # 取り直す
+
+**実行しなくても UI は動く**。images/ が無ければ同じ画像をリモートから読むので、
+オフラインで使いたい / 表示を速くしたいときだけ実行すればよい。
+アイコンの一覧は poe2db.sqlite があればそこから、無ければ poe2db.html から読むので、
+clone 直後（ビルド前）でも実行できる。
 
 `image.ggpk.exposed` が `.dds` を PNG に変換して返す。poe2db.sqlite に記録されている
 アイコンパスの分だけ落として `images/` に置く（約 2,000 枚 / 30MB 程度）。
@@ -10,6 +15,7 @@ HTML はここを相対パスで参照し、無ければ同じ URL にフォー�
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -37,9 +43,41 @@ def local_name(art_path: str) -> str:
     return stem.replace("/", "_") + ".png"
 
 
-def icon_paths(conn: sqlite3.Connection) -> list[str]:
-    rows = conn.execute("SELECT DISTINCT icon FROM search_docs WHERE icon != ''")
-    return sorted({r[0] for r in rows})
+def icon_paths_from_db() -> list[str] | None:
+    if not DB_PATH.exists():
+        return None
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    try:
+        rows = conn.execute("SELECT DISTINCT icon FROM search_docs WHERE icon != ''")
+        return sorted({r[0] for r in rows})
+    finally:
+        conn.close()
+
+
+def icon_paths_from_html() -> list[str] | None:
+    """poe2db.html / web_data.json に埋まっている `icons` 配列を読む.
+
+    clone しただけで poe2db.html しか無い環境でも、ビルドせずに画像を揃えられるようにする。
+    """
+    for path in (ROOT / "web_data.json", ROOT / "poe2db.html"):
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        key = '"icons":['
+        start = text.find(key)
+        if start < 0:
+            continue
+        end = text.find("]", start + len(key))
+        if end < 0:
+            continue
+        try:
+            paths = json.loads(text[start + len(key) - 1:end + 1])
+        except json.JSONDecodeError:
+            continue
+        if paths:
+            print(f"  ({path.name} からアイコン一覧を読みました)", flush=True)
+            return sorted({p for p in paths if isinstance(p, str) and p})
+    return None
 
 
 def main() -> None:
@@ -48,10 +86,13 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=8)
     args = ap.parse_args()
 
-    if not DB_PATH.exists():
-        raise SystemExit("poe2db.sqlite がありません。先に python build_db.py を実行してください。")
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-    paths = icon_paths(conn)
+    # DB があればそこから、無ければ poe2db.html に埋まっている一覧から読む
+    paths = icon_paths_from_db() or icon_paths_from_html()
+    if not paths:
+        raise SystemExit(
+            "アイコンの一覧が見つかりません。\n"
+            "poe2db.html か poe2db.sqlite のどちらかが必要です。\n"
+            "clone 直後なら poe2db.html があるはずなので、このスクリプトだけで揃います。")
     IMAGES.mkdir(exist_ok=True)
     print(f"{len(paths)} icons", flush=True)
 

@@ -15,8 +15,15 @@ poe2db.tw をブラウザで何百回も引く代わりに、手元の単一 HTM
 start poe2db.html
 ```
 
-アイコンは同じフォルダの `images/`（約 2,000 枚 / 60MB）を参照する。フォルダごと移動すれば
-オフラインのまま表示され、無い場合は `image.ggpk.exposed` に自動でフォールバックする。
+アイコンは同じフォルダの `images/` を参照し、**無ければ `image.ggpk.exposed` から自動で読む**。
+つまり `images/` が無くても表示はされる（起動のたびにネットを使う）。
+オフラインで使いたい / 表示を速くしたいときだけ、次を実行して約 2,000 枚（60MB）を手元に置く:
+
+```bash
+python fetch_images.py
+```
+
+これは **clone 直後（ビルド前）でも実行できる** — アイコンの一覧は `poe2db.html` から読むため。
 
 ### 検索できるもの（8 種・12,552 件）
 
@@ -77,15 +84,20 @@ python search.py -k mod "chance to Ignite" --json
 ## 作り直す（パッチ更新時）
 
 ```bash
-python fetch_data.py --force   # 外部から取得。5〜10 分
-python build_db.py             # poe2db.sqlite を作る。約 8 秒
-python fetch_images.py         # アイコン約 2,000 枚（60MB）。初回のみ数分
+python fetch_data.py --force   # 外部から取得。5〜10 分。これを飛ばすと以降が失敗する
+python build_db.py             # poe2db.sqlite を作る。約 10 秒
 python export_web.py           # web_data.json
 python build_web.py            # poe2db.html
 python -m pytest tests -q      # 受け入れテスト 27 本
 ```
 
-前提: Python 3.10+（`requests`）、Node 22+（`npx` が使えること）。
+前提: Python 3.10+（`requests`）、Node 22+（`npx` が使えること。`fetch_data.py` が使う）。
+
+`python fetch_images.py` はこの流れとは独立で、いつ実行してもよい（任意）。
+
+**clone しただけの状態では `data/` `datexport/` `poe2db.sqlite` `images/` はどれも存在しない。**
+これらは生成物で git に入れていないため。ただし `poe2db.html` は入っているので、
+**作り直す必要が無いならビルドは一切不要**。
 
 ## 構成
 
