@@ -1,11 +1,33 @@
 <!-- poe2db: 単一ファイル UI（docs/SPEC.md §8）。build_web.py がデータとパッチ番号を差し込む -->
 <style>
+/* 暗（既定）と明の 2 テーマ。色は変数だけで切り替える */
 :root{
   --bg:#12131a; --panel:#1a1c26; --panel2:#21242f; --line:#2c3040;
   --fg:#e6e8f0; --dim:#9aa0b4; --dim2:#6e7489;
   --accent:#c8a45c; --accent2:#7aa2f7; --hit:#f0c674;
   --unique:#c8a45c; --notable:#8fd3a0; --keystone:#e8d48a; --ascendancy:#c99bf0;
   --mod:#7aa2f7; --socketable:#e59a5c; --gem:#5fd0d0; --timeless:#e57a9a;
+  --stat:#c4c8d8; --imp:#9fb6d8; --imp-dot:#6d86ad;
+  --shead-bg:#171922; --ico-bg:#0d0e14; --mark-bg:#4a3c14;
+  --hw-bg:#3a2c18; --hw-fg:#f0c674; --hw-line:#5a4520;
+  --cult-bg:#33203a; --cult-fg:#e0a0f0; --cult-line:#54305e;
+  --vaal-bg:#3a1f2a; --vaal-fg:#f090a8; --vaal-line:#5e3040;
+  --on-fg:#1a1a1a; --row-line:#20222c;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7fa; --panel:#ffffff; --panel2:#e9ecf3; --line:#ccd1dd;
+  --fg:#191c24; --dim:#4c5464; --dim2:#6d7485;
+  --accent:#8a6410; --accent2:#2350a8; --hit:#6b4c00;
+  --unique:#8a6410; --notable:#1d6b3e; --keystone:#7a5f10; --ascendancy:#6b3a9c;
+  --mod:#2350a8; --socketable:#9a5410; --gem:#146a6a; --timeless:#a52a55;
+  --stat:#21252e; --imp:#28456e; --imp-dot:#5d7ba8;
+  --shead-bg:#e5e9f1; --mark-bg:#ffe9a8;
+  /* アイテム画像はゲーム内の暗い背景を前提に描かれているので、明テーマでも暗いまま置く */
+  --ico-bg:#23262f;
+  --hw-bg:#fdf0d4; --hw-fg:#6b4c00; --hw-line:#d9bb6e;
+  --cult-bg:#f6e6fb; --cult-fg:#6b2d85; --cult-line:#cfa6de;
+  --vaal-bg:#fde6ec; --vaal-fg:#8f2144; --vaal-line:#e3a8bc;
+  --on-fg:#ffffff; --row-line:#e3e6ee;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
@@ -13,8 +35,24 @@ body{margin:0;background:var(--bg);color:var(--fg);
 a{color:var(--accent2)}
 #app{max-width:1180px;margin:0 auto;padding:0 16px 80px}
 
+/* 検索部は普段は畳んで結果に場所を譲る。ホバー / 入力中 / 絞り込み操作中は開く。
+   畳んでいる間も「今どう絞られているか」は要約行で必ず見えるようにする（§8.1）。 */
 header{position:sticky;top:0;z-index:20;background:var(--bg);
-  padding:10px 0 8px;border-bottom:1px solid var(--line)}
+  padding:6px 0 6px;border-bottom:1px solid var(--line)}
+header #filters{overflow:hidden;max-height:0;opacity:0;
+  transition:max-height .14s ease, opacity .12s ease}
+header:hover #filters, header:focus-within #filters, header.pin #filters{
+  max-height:60vh;opacity:1;overflow-y:auto}
+header .summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  margin-top:5px;font-size:11.5px;color:var(--dim2);min-height:17px}
+header:hover .summary, header:focus-within .summary, header.pin .summary{display:none}
+header .summary .s-on{color:var(--fg);background:var(--panel2);
+  border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+header .summary .hint{margin-left:auto;opacity:.75}
+/* 畳んでいるときは検索欄も控えめにする */
+header #q{padding:5px 10px;font-size:13px;transition:padding .14s ease, font-size .14s ease}
+header:hover #q, header:focus-within #q, header.pin #q{padding:9px 12px;font-size:16px}
+header .tabs{margin-bottom:5px}
 .tabs{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
 .tab{padding:5px 14px;border:1px solid var(--line);border-radius:6px 6px 0 0;
   background:var(--panel);color:var(--dim);cursor:pointer;font-weight:600}
@@ -33,20 +71,20 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .chip{padding:3px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);
   color:var(--dim);cursor:pointer;font-size:12px;user-select:none;white-space:nowrap}
 .chip:hover{border-color:var(--dim)}
-.chip.on{background:var(--accent);border-color:var(--accent);color:#1a1a1a;font-weight:600}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-fg);font-weight:600}
 .chip .n{opacity:.6;margin-left:4px;font-size:11px}
 .chip.mini{padding:2px 7px;font-size:11px}
 .toggle{padding:3px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
   color:var(--dim);cursor:pointer;font-size:12px;user-select:none}
-.toggle.on{background:var(--accent2);border-color:var(--accent2);color:#0d1117;font-weight:600}
+.toggle.on{background:var(--accent2);border-color:var(--accent2);color:var(--on-fg);font-weight:600}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .seg button{padding:3px 10px;background:var(--panel);color:var(--dim);border:0;cursor:pointer;
   font-size:12px;font-family:inherit}
-.seg button.on{background:var(--accent2);color:#0d1117;font-weight:600}
+.seg button.on{background:var(--accent2);color:var(--on-fg);font-weight:600}
 
 .group{margin-top:18px}
 .shead{margin:10px 0 2px;padding:2px 8px;color:var(--dim);font-size:12px;font-weight:600;
-  letter-spacing:.04em;border-left:3px solid var(--unique);background:#171922;border-radius:0 4px 4px 0}
+  letter-spacing:.04em;border-left:3px solid var(--unique);background:var(--shead-bg);border-radius:0 4px 4px 0}
 .shead .cnt{color:var(--dim2);font-weight:400;margin-left:8px}
 .ghead{display:flex;align-items:center;gap:8px;cursor:pointer;
   padding:4px 0;border-bottom:1px solid var(--line);margin-bottom:4px}
@@ -56,10 +94,11 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 
 .row{padding:6px 8px;border-radius:6px;border-left:3px solid transparent;cursor:pointer;
   display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:start}
-.row > .ico{grid-row:span 2}
-img.ico{width:40px;height:40px;object-fit:contain;image-rendering:auto;
-  background:#0d0e14;border:1px solid var(--line);border-radius:5px;padding:2px}
-img.ico-sm{width:26px;height:26px;object-fit:contain;vertical-align:middle;margin-right:6px}
+.row > .ico{grid-row:span 2;align-self:start}
+img.ico{width:64px;height:64px;object-fit:contain;
+  background:var(--ico-bg);border:1px solid var(--line);border-radius:6px;padding:3px}
+img.ico-sm{width:38px;height:38px;object-fit:contain;vertical-align:middle;margin-right:8px;
+  background:var(--ico-bg);border:1px solid var(--line);border-radius:5px;padding:2px}
 .row .t, .row .lines{grid-column:2}
 .row:hover{background:var(--panel)}
 .row.sel{background:var(--panel2);border-left-color:var(--accent)}
@@ -69,24 +108,24 @@ img.ico-sm{width:26px;height:26px;object-fit:contain;vertical-align:middle;margi
 .badge{font-size:10.5px;padding:1px 6px;border-radius:4px;background:var(--panel2);
   color:var(--dim);border:1px solid var(--line)}
 .badge.en{color:var(--dim2)}
-.badge.hw{background:#3a2c18;color:var(--hit);border-color:#5a4520}
-.badge.cult{background:#33203a;color:#e0a0f0;border-color:#54305e}
-.badge.vaal{background:#3a1f2a;color:#f090a8;border-color:#5e3040}
+.badge.hw{background:var(--hw-bg);color:var(--hw-fg);border-color:var(--hw-line)}
+.badge.cult{background:var(--cult-bg);color:var(--cult-fg);border-color:var(--cult-line)}
+.badge.vaal{background:var(--vaal-bg);color:var(--vaal-fg);border-color:var(--vaal-line)}
 /* 効果は 1 つ 1 項目のリスト、説明文は地の文。見分けが付くように差をつける */
 .lines{margin-top:3px}
 .lines ul.stats{margin:2px 0;padding:0;list-style:none}
-.lines ul.stats li{position:relative;padding-left:14px;color:#c4c8d8;font-size:13px;
+.lines ul.stats li{position:relative;padding-left:14px;color:var(--stat);font-size:13px;
   line-height:1.5}
 .lines ul.stats li::before{content:"";position:absolute;left:3px;top:.62em;
   width:5px;height:5px;border-radius:1px;background:var(--dim2)}
 /* implicit はゲームと同じく上に置き、区切り線と印の色で explicit と分ける */
-.lines ul.stats li.imp{color:#9fb6d8}
-.lines ul.stats li.imp::before{background:#6d86ad;border-radius:50%}
+.lines ul.stats li.imp{color:var(--imp)}
+.lines ul.stats li.imp::before{background:var(--imp-dot);border-radius:50%}
 .lines ul.stats li.imp-last{padding-bottom:4px;margin-bottom:3px;
   border-bottom:1px dashed var(--line)}
 .lines p.prose{margin:2px 0 4px;color:var(--dim);font-size:12.5px;line-height:1.6;
   padding-left:9px;border-left:2px solid var(--line)}
-mark{background:#4a3c14;color:var(--hit);padding:0 1px;border-radius:2px}
+mark{background:var(--mark-bg);color:var(--hit);padding:0 1px;border-radius:2px;font-weight:600}
 
 .detail{margin:6px 0 10px;padding:10px 12px;background:var(--panel);
   border:1px solid var(--line);border-radius:8px;font-size:13px}
@@ -107,15 +146,25 @@ mark{background:#4a3c14;color:var(--hit);padding:0 1px;border-radius:2px}
 .slotbtn:hover{color:var(--accent)}
 .arrow-hw{color:var(--hit)}
 
-table.skills{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+/* 列幅を宣言どおりにするため fixed。auto だと概要の長文に名前列が潰される */
+table.skills{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;
+  table-layout:fixed}
 table.skills th{text-align:left;color:var(--dim2);font-weight:600;font-size:12px;
   border-bottom:1px solid var(--line);padding:5px 8px;cursor:pointer;white-space:nowrap}
 table.skills th.on{color:var(--accent)}
-table.skills td{padding:5px 8px;border-bottom:1px solid #20222c;vertical-align:top}
+table.skills td{padding:6px 8px;border-bottom:1px solid var(--row-line);vertical-align:top}
+/* 名前がアイコンの脇で不自然に折り返さないよう、列幅を決め打ちする */
+table.skills th:nth-child(1){width:270px}
+table.skills th:nth-child(2){width:58px}
+table.skills th:nth-child(3){width:44px}
+table.skills th:nth-child(4){width:250px}
+table.skills td:nth-child(1) .namecell{display:flex;align-items:center;gap:8px}
+table.skills td:nth-child(1) .namecell .name{line-height:1.35}
+table.skills td:nth-child(2){white-space:nowrap}
 table.skills tr.g:hover td{background:var(--panel)}
 table.skills tr.sel td{background:var(--panel2)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
-.c-r{background:#d05a5a}.c-g{background:#5ac07a}.c-b{background:#5a8ad0}.c-w{background:#c8c8c8}
+.c-r{background:#d05a5a}.c-g{background:#3fa05f}.c-b{background:#4a7ec8}.c-w{background:#9aa0b4}
 .tagline{color:var(--dim2);font-size:11.5px}
 .more{margin:6px 0;padding:4px 10px;font-size:12px;background:var(--panel);color:var(--dim);
   border:1px solid var(--line);border-radius:6px;cursor:pointer;font-family:inherit}
@@ -136,12 +185,18 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
         <button data-lang="en">EN</button>
         <button data-lang="both">両方</button>
       </div>
+      <div class="seg" id="theme">
+        <button data-theme="dark" class="on">暗</button>
+        <button data-theme="light">明</button>
+      </div>
+      <span class="toggle" data-toggle="pin" title="検索部を開いたままにする">📌</span>
       <span class="ver">poe2db __VERSION__</span>
     </div>
     <div class="searchrow">
       <input id="q" placeholder="検索（例: 憤怒 / エナジーシールド / kind:mod slot:helmet）" autocomplete="off" spellcheck="false">
       <span class="stat" id="stat"></span>
     </div>
+    <div class="summary" id="summary"></div>
     <div id="filters"></div>
   </header>
   <div id="out"></div>
@@ -185,7 +240,8 @@ const SLOT_EN = Object.fromEntries(DATA.slots.map(s => [s.id, s.en]));
 /* ------------------------------------------------------------------ state */
 const st = {tab:'all', q:'', lang:'ja', kinds:new Set(), slots:new Set(), subs:new Set(),
   asc:new Set(), hw:false, cult:false, gemTypes:new Set(['active']), tags:new Set(),
-  color:new Set(), sort:'name', shown:0, open:new Set(), sel:-1, collapsed:new Set()};
+  color:new Set(), sort:'name', shown:0, open:new Set(), sel:-1, collapsed:new Set(),
+  theme:'dark', pin:false};
 
 function norm(s){
   return (s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
@@ -603,6 +659,34 @@ function renderFilters(counts){
   return h;
 }
 
+/* 畳んでいる間に出す、今かかっている絞り込みの要約 */
+function summaryHTML(){
+  const on = [];
+  const label = (id, list) => (list.find(x => x[0] === id) || [id, id])[1];
+  if (st.tab === 'skills'){
+    for (const t of st.gemTypes) on.push(label(t, GEM_SUBS));
+    for (const c of st.color) on.push({r:'赤', g:'緑', b:'青', w:'白'}[c] || c);
+    for (const t of st.tags){
+      const i = DATA.gem_tags[t];
+      on.push(st.lang === 'en' ? (i ? i.en : t) : ((i && i.ja) || t));
+    }
+  } else {
+    for (const k of st.kinds) on.push(label(k, KINDS.map(x => [x[0], st.lang === 'en' ? x[2] : x[1]])));
+    for (const sl of st.slots) on.push(st.lang === 'en' ? SLOT_EN[sl] : (SLOT_JA[sl] || sl));
+    for (const sb of st.subs) on.push(label(sb, MOD_SUBS));
+    for (const a of st.asc){
+      const x = DATA.ascendancies.find(y => y.id === a);
+      on.push(x ? (st.lang === 'en' ? x.en : (x.ja || x.en)) : a);
+    }
+    if (st.hw) on.push('石の拳');
+    if (st.cult) on.push('培養');
+  }
+  const chips = on.length
+    ? on.map(t => `<span class="s-on">${esc(t)}</span>`).join('')
+    : '<span>絞り込みなし</span>';
+  return chips + '<span class="hint">↑ ここにマウスを乗せると絞り込みが開きます（📌 で固定）</span>';
+}
+
 function renderSkillFilters(){
   let h = '<div class="chips"><span class="lbl">種別</span>';
   for (const [id, ja] of GEM_SUBS) h += chipHTML(ja, st.gemTypes.has(id), `data-gemtype="${id}"`);
@@ -645,6 +729,7 @@ function render(){
   for (const d of all) counts[d[F.KIND]] = (counts[d[F.KIND]] || 0) + 1;
   document.getElementById('filters').innerHTML = renderFilters(counts);
   document.getElementById('stat').textContent = `${all.length} 件 / ${st.ms}ms`;
+  document.getElementById('summary').innerHTML = summaryHTML();
   st.rows = all;
 
   const out = document.getElementById('out');
@@ -721,7 +806,7 @@ function renderSkills(all){
     const m = d[F.META];
     const open = st.open.has(d[F.ID]);
     h += `<tr class="g${idx === st.sel ? ' sel' : ''}" data-id="${esc(d[F.ID])}" data-idx="${idx}">
-      <td>${iconHTML(d,'ico-sm')}<span class="name">${textCell(d[F.NEN], d[F.NJA])}</span>${m.lin ? ' <span class="badge">リネージュ</span>' : ''}</td>
+      <td><div class="namecell">${iconHTML(d,'ico-sm')}<span class="name">${textCell(d[F.NEN], d[F.NJA])}${m.lin ? ' <span class="badge">リネージュ</span>' : ''}</span></div></td>
       <td><span class="dot c-${m.color || 'w'}"></span>${(m.color || '').toUpperCase()}</td>
       <td>${m.lvl || ''}</td>
       <td class="tagline">${(m.tags || []).map((t,i) => esc(st.lang === 'en' ? t : ((m.tja && m.tja[i]) || t))).join(' ')}</td>
@@ -749,6 +834,7 @@ function saveHash(){
   if (st.hw) p.set('hw', '1');
   if (st.cult) p.set('cult', '1');
   if (st.sort !== 'name') p.set('sort', st.sort);
+  if (st.theme !== 'dark') p.set('theme', st.theme);
   const s = p.toString();
   history.replaceState(null, '', s ? '#' + s : location.pathname);
 }
@@ -764,12 +850,24 @@ function loadHash(){
   st.hw = p.get('hw') === '1';
   st.cult = p.get('cult') === '1';
   st.sort = p.get('sort') || 'name';
+  let savedTheme = null, savedPin = null;
+  try { savedTheme = localStorage.getItem('poe2db.theme'); savedPin = localStorage.getItem('poe2db.pin'); } catch (e) {}
+  st.theme = p.get('theme') || savedTheme || 'dark';
+  st.pin = savedPin === '1';
+  applyTheme();
+  for (const b of document.querySelectorAll('#theme button')) b.classList.toggle('on', b.dataset.theme === st.theme);
   document.getElementById('q').value = st.q;
   for (const b of document.querySelectorAll('#lang button')) b.classList.toggle('on', b.dataset.lang === st.lang);
   for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.tab === st.tab);
 }
 
 /* ---------------------------------------------------------------- events */
+function applyTheme(){
+  document.documentElement.dataset.theme = st.theme;
+  document.querySelector('header').classList.toggle('pin', st.pin);
+  document.querySelector('[data-toggle="pin"]').classList.toggle('on', st.pin);
+  try { localStorage.setItem('poe2db.theme', st.theme); localStorage.setItem('poe2db.pin', st.pin ? '1' : ''); } catch (e) {}
+}
 function toggle(set, v){ set.has(v) ? set.delete(v) : set.add(v); }
 function refresh(){ st.shown = CHUNK; saveHash(); render(); }
 
@@ -778,12 +876,17 @@ document.getElementById('q').addEventListener('input', e => {
   clearTimeout(window._t); window._t = setTimeout(refresh, 50);
 });
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],.row,tr.g');
+  // `[data-theme]` は <html> にも付くので、セレクタは #theme button に限定する
+  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],#theme button,.row,tr.g');
   if (!t) return;
   const ds = t.dataset;
   if (ds.tab !== undefined){ st.tab = ds.tab; st.sel = -1;
     for (const x of document.querySelectorAll('.tab')) x.classList.toggle('on', x === t);
     return refresh(); }
+  if (t.matches('#theme button')){ st.theme = ds.theme; applyTheme();
+    for (const x of document.querySelectorAll('#theme button')) x.classList.toggle('on', x === t);
+    return refresh(); }
+  if (ds.toggle === 'pin'){ st.pin = !st.pin; applyTheme(); return refresh(); }
   if (ds.lang !== undefined){ st.lang = ds.lang;
     for (const x of document.querySelectorAll('#lang button')) x.classList.toggle('on', x === t);
     return refresh(); }
