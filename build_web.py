@@ -28,6 +28,8 @@ FOOT = "\n</body>\n</html>\n"
 
 
 def main() -> None:
+    if not DATA.exists():
+        raise SystemExit("web_data.json がありません。先に python export_web.py を実行してください。")
     payload = DATA.read_text(encoding="utf-8")
     version = json.loads(payload).get("version", "")
     body = TEMPLATE.read_text(encoding="utf-8")

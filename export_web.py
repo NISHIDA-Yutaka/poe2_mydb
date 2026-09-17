@@ -154,6 +154,8 @@ def trim_meta(kind: str, meta: dict, slot_label) -> dict:
 
 
 def main() -> None:
+    if not DB_PATH.exists():
+        raise SystemExit("poe2db.sqlite がありません。先に python build_db.py を実行してください。")
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     meta_rows = {r["key"]: r["value"] for r in conn.execute("SELECT * FROM meta")}

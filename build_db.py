@@ -1258,7 +1258,33 @@ def _zip_lines(en_text: str, ja_text: str) -> list[dict]:
             for e, j in zip(en_lines, ja_lines)]
 
 
+def require_sources() -> None:
+    """取得物が無いまま実行されたとき、何をすればいいかを出して止める.
+
+    `data/` と `datexport/` は生成物なので git には入っていない。
+    clone 直後は fetch_data.py から始める必要がある。
+    """
+    missing = []
+    if not (DATA / "version.txt").exists():
+        missing.append("data/（repoe-fork / .csd / PoB などの取得物）")
+    if not (DATEXPORT / "Japanese" / "BaseItemTypes.json").exists():
+        missing.append("datexport/（GGPK の言語別テーブル）")
+    if not missing:
+        return
+    raise SystemExit(
+        "必要なデータがありません:\n"
+        + "".join(f"  - {m}\n" for m in missing)
+        + "\nこれらは生成物で git には含まれていません。先に取得してください:\n"
+        "    python fetch_data.py\n"
+        "（初回は 5〜10 分。Python の requests と Node 22+ の npx が必要です）\n"
+        "\n"
+        "なお poe2db.html は clone に含まれているので、"
+        "作り直さずに使うだけならビルドは不要です。"
+    )
+
+
 def main() -> None:
+    require_sources()
     if DB_PATH.exists():
         DB_PATH.unlink()
     t0 = time.time()
