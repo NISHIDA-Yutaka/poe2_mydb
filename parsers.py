@@ -491,7 +491,7 @@ def parse_pob_uniques(blocks: list[str]) -> list[dict]:
 # ------------------------------------------------------------- クエリ構文
 
 FILTER_KEYS = {"kind", "slot", "sub", "asc", "hw", "cult", "origin", "tag",
-               "gem", "type", "color", "jewel"}
+               "gem", "type", "color", "jewel", "src"}
 
 
 class Query:

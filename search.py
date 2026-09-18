@@ -103,6 +103,14 @@ def _passes_filters(doc: dict, q: Query) -> bool:
             any(l.get("handwraps") for l in doc["meta"].get("implicits") or [])
         if want != has:
             return False
+    if "src" in f:
+        # src:known = 付く装備か載るユニークが分かるものだけ / src:unknown = その逆
+        known = not doc["meta"].get("orphan")
+        want = f["src"][0]
+        if want in ("known", "yes", "1") and not known:
+            return False
+        if want in ("unknown", "orphan", "no", "0") and known:
+            return False
     if "cult" in f:
         want = f["cult"][0] in ("yes", "1", "true")
         has = bool(doc["meta"].get("cultivation_target")) or \

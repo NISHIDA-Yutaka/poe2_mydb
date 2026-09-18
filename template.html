@@ -135,6 +135,9 @@ img.ico-sm{width:var(--ico-sm);height:var(--ico-sm);object-fit:contain;vertical-
 .badge.en{color:var(--dim2)}
 .badge.hw{background:var(--hw-bg);color:var(--hw-fg);border-color:var(--hw-line)}
 .badge.cult{background:var(--cult-bg);color:var(--cult-fg);border-color:var(--cult-line)}
+.badge.uq{background:var(--panel2);color:var(--unique);border-color:var(--line);cursor:pointer}
+.badge.uq:hover{border-color:var(--unique)}
+.badge.orphan{color:var(--dim2);border-style:dashed}
 .badge.vaal{background:var(--vaal-bg);color:var(--vaal-fg);border-color:var(--vaal-line)}
 /* 効果は 1 つ 1 項目のリスト、説明文は地の文。見分けが付くように差をつける */
 .lines{margin-top:3px}
@@ -427,7 +430,7 @@ const SLOT_EN = Object.fromEntries(DATA.slots.map(s => [s.id, s.en]));
 const st = {tab:'all', q:'', lang:'ja', kinds:new Set(), slots:new Set(), subs:new Set(),
   asc:new Set(), hw:false, cult:false, gemTypes:new Set(['active']), tags:new Set(),
   color:new Set(), sort:'name', shown:0, open:new Set(), sel:-1, collapsed:new Set(),
-  theme:'dark', pin:false};
+  theme:'dark', pin:false, orphan:false};
 
 function norm(s){
   return (s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
@@ -498,6 +501,8 @@ function passFilters(d, q){
   if (f.sub && !f.sub.includes(norm(d[F.SUB]))) return false;
   if (f.gem && (d[F.KIND] !== 'gem' || !f.gem.includes(norm(d[F.SUB])))) return false;
   if (st.asc.size && !(d[F.KIND] === 'ascendancy' && st.asc.has(d[F.META].asc))) return false;
+  // 出所（付く装備 / 載るユニーク）が分からない mod は既定で伏せる。件数はチップに出す
+  if (!st.orphan && d[F.KIND] === 'mod' && d[F.META].orphan) return false;
   if (st.hw && !hasHW(d)) return false;
   if (st.cult && !hasCult(d)) return false;
   if (f.hw && (f.hw[0] === 'yes') !== hasHW(d)) return false;
@@ -624,7 +629,8 @@ function textCell(en, ja){
 function bodyLines(d){
   const k = d[F.KIND], m = d[F.META];
   const stat = l => ({en: l[0], ja: l[1], hw: l[2], cult: l[3]});
-  if (k === 'mod') return [stat([d[F.NEN], d[F.NJA]])];
+  // mod は本文がそのまま名前なので、箇条書きで繰り返さない
+  if (k === 'mod') return [];
   if (k === 'gem'){
     const out = [];
     if (m.sum) out.push({en: m.sum[0], ja: m.sum[1], prose: true});
@@ -680,6 +686,13 @@ function rowHTML(d, idx){
     if (st.cult && m.cult) badges += '<span class="badge cult">培養可</span>';
   }
   if (d[F.KIND] === 'mod' && d[F.SUB] === 'handwraps') badges += '<span class="badge hw">石の拳</span>';
+  if (d[F.KIND] === 'mod'){
+    for (const u of (m.uq || []).slice(0, 3))
+      badges += `<span class="badge uq" data-goto="unique:${esc(u[0])}"
+        title="このユニークに載っている">${esc(u[1])}</span>`;
+    if ((m.uq || []).length > 3) badges += `<span class="badge">他 ${m.uq.length - 3}</span>`;
+    if (m.orphan) badges += '<span class="badge orphan">出所不明</span>';
+  }
   if (d[F.KIND] === 'mod' && m.lvl) badges += `<span class="badge">Lv${m.lvl}</span>`;
   if (d[F.KIND] === 'gem' && m.lvl) badges += `<span class="badge">Lv${m.lvl}</span>`;
   const slots = d[F.SLOTS].length ? slotBadges(d[F.SLOTS]) : '';
@@ -818,8 +831,13 @@ function detailHTML(d){
       h += '<section><h4>付く装備</h4><div>' + ap.map(a =>
         `<span class="badge slotbtn" data-slot="${a[0]}">${esc(st.lang==='en'?SLOT_EN[a[0]]:SLOT_JA[a[0]]||a[0])}${a[1]>1?` Lv${a[1]}`:''}</span>`
       ).join(' ') + '</div></section>';
+    } else if (m.uq && m.uq.length){
+      h += '<section><h4>載っているユニーク</h4><div>' + m.uq.map(u =>
+        `<span class="badge uq" data-goto="unique:${esc(u[0])}">${esc(u[1])}</span>`
+      ).join(' ') + '</div></section>';
     } else {
-      h += '<section><h4>付く装備</h4><div class="pair">なし（ユニーク固有 / 特殊）</div></section>';
+      h += `<section><h4>出所</h4><div class="pair">特定できず。通常のクラフトでは付かず、
+        どのユニークに載っているかも突き止められなかった mod です。</div></section>`;
     }
     const info = [['生成', m.gen], ['必要レベル', String(m.lvl || 1)]];
     if (m.grp) info.push(['グループ', m.grp]);
@@ -914,6 +932,9 @@ function renderFilters(counts){
   if (showMod){
     h += '<div class="chips"><span class="lbl">mod</span>';
     for (const [id, ja] of MOD_SUBS) h += chipHTML(ja, st.subs.has(id), `data-sub="${id}"`);
+    const n = countOrphans();
+    h += `<span class="toggle${st.orphan ? ' on' : ''}" data-toggle="orphan"
+      title="付く装備も載るユニークも特定できない mod">出所不明 ${n}</span>`;
     h += '</div>';
   }
   if (showAsc){
@@ -959,6 +980,22 @@ function summaryHTML(){
     ? on.map(t => `<span class="s-on">${esc(t)}</span>`).join('')
     : '<span>絞り込みなし</span>';
   return chips + '<span class="hint">↑ ここにマウスを乗せると絞り込みが開きます（📌 で固定）</span>';
+}
+
+/* 今の絞り込み条件で伏せられている「出所不明」mod の件数 */
+function countOrphans(){
+  const q = parseQuery(st.q);
+  let n = 0;
+  for (const d of D){
+    if (d[F.KIND] !== 'mod' || !d[F.META].orphan) continue;
+    let ok = true;
+    for (const t of q.terms) if (!d[F.HAY].includes(t)){ ok = false; break; }
+    if (!ok) continue;
+    if (st.kinds.size && !st.kinds.has('mod')) continue;
+    if (st.subs.size && !st.subs.has(d[F.SUB])) continue;
+    n++;
+  }
+  return n;
 }
 
 function renderSkillFilters(){
@@ -1106,6 +1143,7 @@ function saveHash(){
   if (st.color.size) p.set('color', [...st.color].join(','));
   if (st.gemTypes.size !== 1 || !st.gemTypes.has('active')) p.set('gt', [...st.gemTypes].join(','));
   if (st.hw) p.set('hw', '1');
+  if (st.orphan) p.set('orphan', '1');
   if (st.cult) p.set('cult', '1');
   if (st.sort !== 'name') p.set('sort', st.sort);
   if (st.theme !== 'dark') p.set('theme', st.theme);
@@ -1122,6 +1160,7 @@ function loadHash(){
   set('asc', st.asc); set('tag', st.tags); set('color', st.color);
   if (p.get('gt')) set('gt', st.gemTypes);
   st.hw = p.get('hw') === '1';
+  st.orphan = p.get('orphan') === '1';
   st.cult = p.get('cult') === '1';
   st.sort = p.get('sort') || 'name';
   let savedTheme = null, savedPin = null;
@@ -1240,8 +1279,10 @@ function openEditor(id){
   const d = edTarget, e = edits[id] || {};
   document.getElementById('ed-target').textContent =
     `${KIND_JA[d[F.KIND]] || d[F.KIND]} / ${d[F.NEN]}`;
+  document.querySelector('label[for="ed-name"]').textContent =
+    d[F.KIND] === 'mod' ? '本文の訳' : '日本語名';
   document.getElementById('ed-name').value = e.n || d[F.NJA] || '';
-  document.getElementById('ed-name').placeholder = d[F.NJA] || '（訳なし）';
+  document.getElementById('ed-name').placeholder = plainText(d[F.NJA]) || '（訳なし）';
   document.getElementById('ed-url').value = e.u !== undefined ? e.u : '';
   const auto = POE2DB_KINDS.has(d[F.KIND]) ? poe2dbURL(d) : '';
   document.getElementById('ed-url').placeholder = auto || 'このページは無し';
@@ -1337,7 +1378,7 @@ document.addEventListener('click', e => {
     return;
   }
   hideKeyword();
-  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],[data-set],[data-edit],[data-ed],#theme button,.row,tr.g');
+  const t = e.target.closest('[data-kind],[data-slot],[data-sub],[data-asc],[data-toggle],[data-group],[data-tab],[data-lang],[data-gemtype],[data-color],[data-tag],[data-sort],[data-set],[data-edit],[data-ed],[data-goto],#theme button,.row,tr.g');
   if (!t) return;
   const ds = t.dataset;
   if (ds.edit !== undefined){ openEditor(ds.edit); return; }
@@ -1381,6 +1422,19 @@ document.addEventListener('click', e => {
   if (ds.toggle === 'hw'){ st.hw = !st.hw; return refresh(); }
   if (ds.toggle === 'cult'){ st.cult = !st.cult; return refresh(); }
   if (ds.toggle === 'cleartags'){ st.tags.clear(); return refresh(); }
+  if (ds.toggle === 'orphan'){ st.orphan = !st.orphan; return refresh(); }
+  if (ds.goto !== undefined){
+    // mod からそれが載っているユニークへ飛ぶ
+    const target = D.find(x => x[F.ID] === ds.goto);
+    if (target){
+      st.kinds = new Set(['unique']); st.subs.clear(); st.slots.clear();
+      st.q = plainText(target[F.NJA] || target[F.NEN]);
+      document.getElementById('q').value = st.q;
+      st.open.add(target[F.ID]);
+      refresh(); window.scrollTo(0, 0);
+    }
+    return;
+  }
   if (ds.group !== undefined){ toggle(st.collapsed, ds.group); return render(); }
   if (ds.id !== undefined){
     st.open.has(ds.id) ? st.open.delete(ds.id) : st.open.add(ds.id);

@@ -232,6 +232,30 @@ def test_keywords(conn, raw):
     assert any(d["kind"] == "keyword" for d in S.search(conn, "憤怒"))
 
 
+def test_mod_source_attribution(conn, raw):
+    """mod の出所（付く装備 / 載るユニーク）が分かるものと、分からないものを区別できる."""
+    res = S.search(conn, "憤怒", kinds=["mod"])
+    assert len(res) >= 40
+    known = [d for d in res if not d["meta"].get("orphan")]
+    orphan = [d for d in res if d["meta"].get("orphan")]
+    assert known and orphan
+    # 出所ありは必ず付く装備か載るユニークを持つ
+    for d in known:
+        assert d["meta"].get("applies_to") or d["meta"].get("on_uniques"), d["meta"]["mod_id"]
+    # ユニーク固有 mod がどのユニークに載るか特定できている
+    on_uq = [d for d in res if d["meta"].get("on_uniques")]
+    assert len(on_uq) >= 5, len(on_uq)
+    names = {u["ja"] or u["en"] for d in on_uq for u in d["meta"]["on_uniques"]}
+    assert names
+    # src フィルタで絞れる
+    assert len(S.search(conn, "憤怒 src:known", kinds=["mod"])) == len(known)
+    assert len(S.search(conn, "憤怒 src:unknown", kinds=["mod"])) == len(orphan)
+    # 全体でも十分な数のユニーク固有 mod が特定できている
+    total = raw.execute(
+        "SELECT COUNT(DISTINCT mod_id) FROM unique_lines WHERE mod_id != ''").fetchone()[0]
+    assert total >= 1000, total
+
+
 def test_icons_present(raw):
     """アイコンのパスが主要な kind に入っている."""
     have = dict(raw.execute(

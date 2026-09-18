@@ -57,6 +57,10 @@ def trim_meta(kind: str, meta: dict, slot_label) -> dict:
             out["cult"] = 1
         if meta.get("is_essence_only"):
             out["ess"] = 1
+        if meta.get("on_uniques"):
+            out["uq"] = [[u["id"], u["ja"] or u["en"]] for u in meta["on_uniques"]]
+        if meta.get("orphan"):
+            out["orphan"] = 1
         return out
 
     if kind == "unique":

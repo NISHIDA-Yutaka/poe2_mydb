@@ -1121,6 +1121,15 @@ class Builder:
                 add(f"{kind}:{h}", kind, kind, [], name_en, name_ja, "", "", lines, meta,
                     extra_hay=[flav_en, flav_ja], icon=icon)
 
+        # mod がどのユニークに載っているかの逆引き（generation_type=unique は
+        # mods_by_base に出ないので、これが唯一の出所情報になる）
+        mod_on_unique: dict[str, list[dict]] = defaultdict(list)
+        for mid, uid, uen, uja in cur.execute(
+                "SELECT l.mod_id, u.id, u.name_en, u.name_ja FROM unique_lines l "
+                "JOIN uniques u ON u.id = l.unique_id WHERE l.mod_id != ''"):
+            if not any(x["id"] == uid for x in mod_on_unique[mid]):
+                mod_on_unique[mid].append({"id": uid, "en": uen, "ja": uja})
+
         # mod
         for r in cur.execute("SELECT * FROM mods"):
             (mid, name, text_en, text_ja, ja_src, gen, dom, lvl, group, tags, stat_ids,
@@ -1139,6 +1148,16 @@ class Builder:
                     "stat_ids": stat_ids, "stat_ranges": json.loads(stats_json),
                     "is_essence_only": bool(ess), "applies_to": applies,
                     "cultivation_replaceable": bool(cult)}
+            on_uniques = mod_on_unique.get(mid, [])
+            if on_uniques:
+                meta["on_uniques"] = on_uniques
+                extra_uniques = [u["en"] for u in on_uniques] + [u["ja"] for u in on_uniques]
+            else:
+                extra_uniques = []
+            # 付く装備も載るユニークも分からない mod は、検索結果では素性が追えない。
+            # 消さずに印を付けて、UI 側で既定では畳めるようにする。
+            if not applies and not on_uniques:
+                meta["orphan"] = True
             extra = [spawn]
             if tfrom and tfrom in self.mod_rows:
                 src = self.mod_rows[tfrom]
@@ -1152,7 +1171,7 @@ class Builder:
             slot_ids = S.with_parents([e["slot"] for e in applies if e["slot"]])
             add(f"mod:{mid}", "mod", sub or gen, slot_ids, text_en, text_ja,
                 name or "", "", [{"en": text_en, "ja": text_ja}], meta,
-                extra_hay=extra, sort_key=lvl or 0, slot_hay=False)
+                extra_hay=extra + extra_uniques, sort_key=lvl or 0, slot_hay=False)
 
         # socketable
         for r in cur.execute("SELECT * FROM socketables ORDER BY name_en"):

@@ -33,7 +33,7 @@ python fetch_images.py
 | ノータブル | 通常ツリーのノータブル | 984 |
 | キーストーン | 通常ツリーのキーストーン（ノータブルとは別枠） | 33 |
 | アセンダンシー | 23 アセンダンシーのパッシブ | 425 |
-| mod | アイテム mod。**どの装備に付くか**を持つ | 9,151 |
+| mod | アイテム mod。**どの装備に付くか / どのユニークに載るか**を持つ | 9,151 |
 | ソケット | ルーン / ソウルコア。**装着先ごとの効果** | 313 |
 | ジェム | スキル / サポート / リネージュ / スピリット | 1,120 |
 | タイムレス | Heroic Tragedy / Undying Hate の変化パッシブ | 77 |
@@ -58,6 +58,9 @@ python fetch_images.py
 - **⚙ で表示設定**: アイコンの大きさ・文字サイズ・表示幅・主要色 / 操作色を変えられる。
   変更は即反映で次回も保持され、「既定に戻す」で初期値に戻せる
 - 各行の右上に **poe2db.tw の該当ページへのリンク**（mod を除く）
+- mod には**どのユニークに載っているか**をバッジで出す。押すとそのユニークへ飛ぶ。
+  出所（付く装備も載るユニークも）が特定できない mod は既定で伏せ、件数をチップに出す
+  （`出所不明 N` を押すと表示）
 - 行にマウスを乗せると出る **✎ で手直し**できる（次節）
 
 ## 訳やリンクを手で直す
@@ -92,6 +95,7 @@ kind:mod slot:helmet     kind / 部位
 sub:prefix asc:Monk1     sub_kind / アセンダンシー
 tag:melee,nova           ジェムタグ（AND）
 hw:yes cult:yes          石の拳あり / 培養の対象
+src:known src:unknown    出所が分かる mod だけ / 分からないものだけ
 origin:vaal jewel:kalguur
 ```
 
@@ -112,7 +116,7 @@ python fetch_data.py --force   # 外部から取得。5〜10 分。これを飛�
 python build_db.py             # poe2db.sqlite を作る。約 10 秒
 python export_web.py           # web_data.json
 python build_web.py            # poe2db.html
-python -m pytest tests -q      # 受け入れテスト 29 本
+python -m pytest tests -q      # 受け入れテスト 30 本
 ```
 
 前提: Python 3.10+（`requests`）、Node 22+（`npx` が使えること。`fetch_data.py` が使う）。
