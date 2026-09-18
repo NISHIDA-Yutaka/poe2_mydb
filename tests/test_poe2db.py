@@ -256,6 +256,43 @@ def test_mod_source_attribution(conn, raw):
     assert total >= 1000, total
 
 
+def test_search_hits_are_explainable(conn):
+    """検索結果は、名前か本文にその語があるものだけ（別項目の名前で引っかからない）."""
+    from parsers import normalize_for_search as N
+
+    def visible(d):
+        parts = [d["name_en"], d["name_ja"], d["group_en"], d["group_ja"]]
+        parts += [l.get("en", "") + l.get("ja", "") for l in d["lines"]]
+        m = d["meta"]
+        for l in (m.get("implicits") or []):
+            parts.append(l.get("en", "") + l.get("ja", ""))
+            hw = l.get("handwraps")
+            if hw:
+                parts.append(hw.get("en", "") + hw.get("ja", ""))
+        for e in (m.get("effects") or []):
+            for l in (e.get("lines") or []):
+                parts.append(l.get("en", "") + l.get("ja", ""))
+        for k in ("summary_en", "summary_ja", "desc_en", "desc_ja",
+                  "flavour_en", "flavour_ja"):
+            parts.append(str(m.get(k, "")))
+        for x in (m.get("detail") or []):
+            parts.append(str(x.get("en", "")) + str(x.get("ja", "")))
+            for l in (x.get("levels") or []):
+                parts.append(str(l.get("en", "")) + str(l.get("ja", "")))
+        for k in ("transforms_from", "handwraps"):
+            if m.get(k):
+                parts.append(m[k].get("en", "") + m[k].get("ja", ""))
+        for l in d["lines"]:
+            hw = l.get("handwraps")
+            if hw:
+                parts.append(hw.get("en", "") + hw.get("ja", ""))
+        return N(" ".join(str(p) for p in parts))
+
+    for q in ("憤怒", "エナジーシールド", "クリティカル", "回避"):
+        for d in S.search(conn, q):
+            assert N(q) in visible(d), (q, d["kind"], d["name_en"])
+
+
 def test_icons_present(raw):
     """アイコンのパスが主要な kind に入っている."""
     have = dict(raw.execute(

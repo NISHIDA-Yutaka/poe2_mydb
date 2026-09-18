@@ -1151,9 +1151,9 @@ class Builder:
             on_uniques = mod_on_unique.get(mid, [])
             if on_uniques:
                 meta["on_uniques"] = on_uniques
-                extra_uniques = [u["en"] for u in on_uniques] + [u["ja"] for u in on_uniques]
-            else:
-                extra_uniques = []
+            # 載るユニークの名前は haystack に入れない。入れると「憤怒」で
+            # 『アスフィクシアの憤怒』が持つ mod が全部ヒットしてしまう。
+            # アイテム名で引きたいときは kind=unique を見るのが筋。
             # 付く装備も載るユニークも分からない mod は、検索結果では素性が追えない。
             # 消さずに印を付けて、UI 側で既定では畳めるようにする。
             if not applies and not on_uniques:
@@ -1171,7 +1171,7 @@ class Builder:
             slot_ids = S.with_parents([e["slot"] for e in applies if e["slot"]])
             add(f"mod:{mid}", "mod", sub or gen, slot_ids, text_en, text_ja,
                 name or "", "", [{"en": text_en, "ja": text_ja}], meta,
-                extra_hay=extra + extra_uniques, sort_key=lvl or 0, slot_hay=False)
+                extra_hay=extra, sort_key=lvl or 0, slot_hay=False)
 
         # socketable
         for r in cur.execute("SELECT * FROM socketables ORDER BY name_en"):

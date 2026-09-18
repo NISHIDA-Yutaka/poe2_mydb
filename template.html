@@ -626,6 +626,13 @@ function textCell(en, ja){
 
 /* 本文の行。prose = 地の文（説明・概要）、それ以外は効果 1 つ = 1 項目のリスト。
    見分けが付くように描き分けるので、種別をここで決める。 */
+/** 今の検索語がこのテキストに当たるか（一致の理由を見せるため） */
+function hitsTerm(text){
+  if (!st.terms || !st.terms.length) return false;
+  const hay = norm(plainText(text || ''));
+  return st.terms.some(t => hay.includes(t));
+}
+
 function bodyLines(d){
   const k = d[F.KIND], m = d[F.META];
   const stat = l => ({en: l[0], ja: l[1], hw: l[2], cult: l[3]});
@@ -716,7 +723,10 @@ function rowHTML(d, idx){
     if (st.cult && l.cult) extra += ' <span class="badge cult">◆</span>';
     if (l.hw && l.hw !== 0){
       const [hwTxt] = pick(l.hw[0], l.hw[1]);
-      if (st.hw || st.open.has(d[F.ID])) extra += ` <span class="arrow-hw">→ ${mk(hwTxt)}</span>`;
+      // 検索語が変化後の文だけに当たっている場合は、トグルに関係なく出す。
+      // でないと「なぜこれが出たのか」が見えない
+      if (st.hw || st.open.has(d[F.ID]) || hitsTerm(l.hw[0] + ' ' + l.hw[1]))
+        extra += ` <span class="arrow-hw">→ ${mk(hwTxt)}</span>`;
     }
     if (!open){ lines += '<ul class="stats">'; open = true; }
     const cls = [fixed[1] ? 'ja' : '', l.imp ? 'imp' : '', l.lastImp ? 'imp-last' : '']
