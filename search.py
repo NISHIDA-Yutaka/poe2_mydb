@@ -48,6 +48,8 @@ def _row_to_doc(row: sqlite3.Row) -> dict:
         "group_en": row["group_en"], "group_ja": row["group_ja"],
         "lines": json.loads(row["lines_json"]), "meta": json.loads(row["meta_json"]),
         "haystack": row["haystack"], "sort_key": row["sort_key"],
+        # 石の拳で変化した後の文だけの haystack（hw:off のとき検索から外す）
+        "haystack_hw": (row["hay_hw"] if "hay_hw" in row.keys() else "") or "",
     }
 
 
@@ -83,6 +85,15 @@ def _meta_tokens(doc: dict, key: str) -> list[str]:
     return []
 
 
+#: `hw:` に渡すと石の拳を検索から丸ごと外す値
+HW_OFF = ("off", "none", "exclude", "no-hw", "hide")
+
+
+def hw_excluded(q: Query) -> bool:
+    """石の拳を検索対象から外す指定か（SPEC §6.6）."""
+    return any(v in HW_OFF for v in q.filters.get("hw", []))
+
+
 def _passes_filters(doc: dict, q: Query) -> bool:
     f = q.filters
     if "kind" in f and doc["kind"] not in f["kind"]:
@@ -97,12 +108,18 @@ def _passes_filters(doc: dict, q: Query) -> bool:
     if "jewel" in f and doc["kind"] != "timeless":
         return False
     if "hw" in f:
-        want = f["hw"][0] in ("yes", "1", "true")
-        has = bool(doc["meta"].get("handwraps")) or doc["sub_kind"] == "handwraps" or \
-            any(l.get("handwraps") for l in doc["lines"]) or \
-            any(l.get("handwraps") for l in doc["meta"].get("implicits") or [])
-        if want != has:
-            return False
+        # hw:off = 石の拳（マーシャルアーティスト専用）を検索から外す。
+        # 変化後の文でのヒットは search() 側で無効にし、ここでは専用 mod を落とす
+        if hw_excluded(q):
+            if doc["sub_kind"] == "handwraps":
+                return False
+        else:
+            want = f["hw"][0] in ("yes", "1", "true", "only")
+            has = bool(doc["meta"].get("handwraps")) or doc["sub_kind"] == "handwraps" or \
+                any(l.get("handwraps") for l in doc["lines"]) or \
+                any(l.get("handwraps") for l in doc["meta"].get("implicits") or [])
+            if want != has:
+                return False
     if "src" in f:
         # src:known = 付く装備か載るユニークが分かるものだけ / src:unknown = その逆
         known = not doc["meta"].get("orphan")
@@ -166,9 +183,14 @@ def search(conn: sqlite3.Connection, text: str = "", *, kinds=None, slots=None,
         q.filters.setdefault(key, []).extend(normalize_for_search(str(v)) for v in vals)
 
     out: list[dict] = []
+    skip_hw = hw_excluded(q)
     for row in _candidate_rows(conn, q):
         doc = _row_to_doc(row)
-        if not match_haystack(q, doc["haystack"]):
+        # 変化後の文は既定で検索対象。hw:off のときだけ外す
+        hay = doc["haystack"]
+        if doc["haystack_hw"] and not skip_hw:
+            hay = f"{hay} {doc['haystack_hw']}"
+        if not match_haystack(q, hay):
             continue
         if not _passes_filters(doc, q):
             continue

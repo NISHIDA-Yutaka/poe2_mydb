@@ -80,7 +80,10 @@ CREATE TABLE search_docs (
     id TEXT PRIMARY KEY, kind TEXT, sub_kind TEXT, slots TEXT,
     name_en TEXT, name_ja TEXT, group_en TEXT, group_ja TEXT,
     lines_json TEXT, meta_json TEXT, haystack TEXT, sort_key INT,
-    icon TEXT);   -- `Art/` を除いた .dds パス。images/ の PNG 名は fetch_images.local_name
+    icon TEXT,   -- `Art/` を除いた .dds パス。images/ の PNG 名は fetch_images.local_name
+    -- 石の拳で変化した後の文だけを分けて持つ。石の拳はマーシャルアーティスト
+    -- 専用なので、検索対象から丸ごと外せるようにしておく（SPEC §6.6）
+    hay_hw TEXT);
 
 CREATE INDEX idx_search_kind ON search_docs(kind);
 CREATE VIRTUAL TABLE search_fts USING fts5(id UNINDEXED, haystack, tokenize='trigram');

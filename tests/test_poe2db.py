@@ -279,9 +279,8 @@ def test_search_hits_are_explainable(conn):
             parts.append(str(x.get("en", "")) + str(x.get("ja", "")))
             for l in (x.get("levels") or []):
                 parts.append(str(l.get("en", "")) + str(l.get("ja", "")))
-        for k in ("transforms_from", "handwraps"):
-            if m.get(k):
-                parts.append(m[k].get("en", "") + m[k].get("ja", ""))
+        # 変化前の文（transforms_from）も、元 mod 側が持つ変化後の文
+        # （meta.handwraps）も検索対象ではないので、材料に入れない
         for l in d["lines"]:
             hw = l.get("handwraps")
             if hw:
@@ -341,6 +340,49 @@ def test_t13_handwraps_on_unique_gloves(conn):
     assert total >= 95, total
     sample = next(l for d in res for l in d["lines"] if l.get("handwraps"))
     assert sample["handwraps"]["en"] and sample["handwraps"]["mod_id"]
+
+
+def test_handwraps_excluded_from_search(conn, raw):
+    """hw:off で石の拳（マーシャルアーティスト専用）が検索から外れる."""
+    from parsers import normalize_for_search as N
+
+    # 専用 mod は 1 件も出ない
+    for q in ("", "エナジーシールド", "回避"):
+        res = S.search(conn, f"{q} kind:mod hw:off")
+        assert not [d for d in res if d["sub_kind"] == "handwraps"], q
+        # 外す前は出ている（外す意味がある）
+        assert [d for d in S.search(conn, f"{q} kind:mod") if d["sub_kind"] == "handwraps"], q
+
+    # 変化後の文でしか当たらないユニークも出なくなる
+    on = S.search(conn, "エナジーシールド kind:unique")
+    off = S.search(conn, "エナジーシールド kind:unique hw:off")
+    assert len(off) < len(on)
+    gone = {d["id"] for d in on} - {d["id"] for d in off}
+    for d in on:
+        if d["id"] not in gone:
+            continue
+        # 消えたものは、変化後の文にしか語が無かったものだけ
+        own = N(" ".join([d["name_ja"], d["name_en"]] +
+                         [l.get("ja", "") + l.get("en", "")
+                          for l in d["lines"] + (d["meta"].get("implicits") or [])]))
+        assert N("エナジーシールド") not in own, d["name_en"]
+
+
+def test_handwraps_not_matched_by_original_text(conn, raw):
+    """石の拳 mod は自分（変化後）の文でだけヒットする＝元 mod と二重に出ない."""
+    from parsers import normalize_for_search as N
+
+    for q in ("憤怒", "回避", "ダメージ", "出血"):
+        for d in S.search(conn, f"{q} kind:mod"):
+            if d["sub_kind"] != "handwraps":
+                continue
+            own = N(d["name_ja"] + " " + d["name_en"])
+            assert N(q) in own, (q, d["meta"]["mod_id"])
+
+    # 文が変わらない「変化」は載せない（元 mod と同じ行が 2 つ並ぶだけなので）
+    ids = {d["meta"]["mod_id"] for d in S.search(conn, "kind:mod hw:only")}
+    assert "HandWrapsUniqueRageRegeneration1" not in ids
+    assert "HandWrapsStrength1" in ids
 
 
 # ------------------------------------------------------------- T14 培養

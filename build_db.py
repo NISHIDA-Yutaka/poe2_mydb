@@ -1060,7 +1060,8 @@ class Builder:
         docs: list[tuple] = []
 
         def add(doc_id, kind, sub, slot_ids, name_en, name_ja, group_en, group_ja,
-                lines, meta, extra_hay=(), sort_key=0, slot_hay=True, icon=""):
+                lines, meta, extra_hay=(), sort_key=0, slot_hay=True, icon="",
+                hw_hay=()):
             slot_ids = list(slot_ids or [])
             # mod は付く装備が多く、部位ラベルを haystack に入れると容量が跳ねる。
             # 部位での絞り込みは slot チップ（slots 配列）が担当する。
@@ -1070,7 +1071,7 @@ class Builder:
             docs.append((doc_id, kind, sub, ",".join(slot_ids), name_en, name_ja,
                          group_en, group_ja, json.dumps(lines, ensure_ascii=False),
                          json.dumps(meta, ensure_ascii=False), hay, sort_key,
-                         _art_path(icon)))
+                         _art_path(icon), haystack(hw_hay)))
 
         # unique
         for r in cur.execute("SELECT * FROM uniques ORDER BY name_en"):
@@ -1083,6 +1084,7 @@ class Builder:
                     "has_stats": bool(has_stats), "is_alternate_art": bool(alt_art),
                     "origin": origin, "is_vaal_unique": bool(is_vaal),
                     "cultivation_target": bool(cult)}
+            # 石の拳で変化した後の文は別枠（hay_hw）に入れる。検索から外せるように
             hw = [l["handwraps"]["en"] for l in implicits + stats if l.get("handwraps")]
             hw += [l["handwraps"]["ja"] for l in implicits + stats if l.get("handwraps")]
             # 部位ごとに塊で並ぶように、slot の表示順を sort_key にする
@@ -1091,7 +1093,8 @@ class Builder:
             add(f"unique:{uid}", "unique", "", S.with_parents([slot]) if slot else [],
                 name_en, name_ja, base_en, base_ja, stats, meta,
                 extra_hay=[l.get("en") for l in implicits] +
-                          [l.get("ja") for l in implicits] + hw + [origin],
+                          [l.get("ja") for l in implicits] + [origin],
+                hw_hay=hw,
                 sort_key=slot_rank, icon=self.unique_icon.get(uid, ""))
 
         # notable / ascendancy
@@ -1131,6 +1134,7 @@ class Builder:
                 mod_on_unique[mid].append({"id": uid, "en": uen, "ja": uja})
 
         # mod
+        n_hw_noop = 0
         for r in cur.execute("SELECT * FROM mods"):
             (mid, name, text_en, text_ja, ja_src, gen, dom, lvl, group, tags, stat_ids,
              stats_json, ess, spawn, sub, tfrom, hwid, cult) = r
@@ -1161,13 +1165,21 @@ class Builder:
             extra = [spawn]
             if tfrom and tfrom in self.mod_rows:
                 src = self.mod_rows[tfrom]
+                # 文が変わらない「変化」は、元 mod と全く同じ行が 2 つ並ぶだけなので出さない
+                if (normalize_for_search(text_ja or text_en)
+                        == normalize_for_search(src["text_ja"] or src["text_en"])):
+                    n_hw_noop += 1
+                    continue
                 meta["transforms_from"] = {"mod_id": tfrom, "en": src["text_en"],
                                            "ja": src["text_ja"]}
-                extra += [src["text_en"], src["text_ja"]]
+                # 変化前の文は検索対象に入れない。入れると元 mod と変化後 mod が
+                # 同じ語で 2 つ並び、同じことが二重に出る
             if hwid and hwid in self.mod_rows:
                 hw = self.mod_rows[hwid]
                 meta["handwraps"] = {"mod_id": hwid, "en": hw["text_en"],
                                      "ja": hw["text_ja"]}
+            # 石の拳 mod（sub_kind=handwraps）は丸ごと専用なので、除外は
+            # haystack ではなく sub_kind で行う（検索側の hw:off）
             slot_ids = S.with_parents([e["slot"] for e in applies if e["slot"]])
             add(f"mod:{mid}", "mod", sub or gen, slot_ids, text_en, text_ja,
                 name or "", "", [{"en": text_en, "ja": text_ja}], meta,
@@ -1258,13 +1270,17 @@ class Builder:
                 {"keyword_id": kid})
 
         self.conn.executemany(
-            "INSERT OR REPLACE INTO search_docs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", docs)
+            "INSERT OR REPLACE INTO search_docs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", docs)
+        # FTS は候補を絞るだけなので、石の拳の分も含めた全文を入れておく
+        # （実際に当てるかどうかは match_haystack 側で決める）
         self.conn.executemany(
             "INSERT INTO search_fts (id, haystack) VALUES (?,?)",
-            [(d[0], d[10]) for d in docs])
+            [(d[0], f"{d[10]} {d[13]}".strip() if d[13] else d[10]) for d in docs])
         by_kind = defaultdict(int)
         for d in docs:
             by_kind[d[1]] += 1
+        if n_hw_noop:
+            log(f"  石の拳: 文が変わらない変化 {n_hw_noop} 件は出さない")
         self.counts["search_docs"] = dict(by_kind)
         log(f"  search_docs: {len(docs)} {dict(by_kind)}")
 

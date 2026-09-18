@@ -222,6 +222,8 @@ def main() -> None:
             lines, trim_meta(kind, meta, slot_label),
             r["haystack"], r["sort_key"],
             icons[icon] if icon else -1,
+            # 石の拳で変化した後の文だけの haystack。UI が検索から外せるように分ける
+            r["hay_hw"] or "",
         ])
 
     gem_tags = {r["id"]: (r["name_en"], r["name_ja"])
