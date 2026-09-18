@@ -62,11 +62,11 @@ a{color:var(--accent2)}
 
 /* 検索部は普段は畳んで結果に場所を譲る。ホバー / 入力中 / 絞り込み操作中は開く。
    畳んでいる間も「今どう絞られているか」は要約行で必ず見えるようにする（§8.1）。 */
-/* 検索部は画面幅いっぱいの帯にして、一覧と地続きに見せない（§8.1） */
+/* 検索部は一覧と同じ幅の帯にして、地続きに見せない（§8.1） */
 header{position:sticky;top:0;z-index:20;background:var(--head-bg);
+  margin:0 -16px;padding:8px 16px 9px;   /* #app の左右余白ぶんまで広げる */
   border-bottom:2px solid var(--head-line);border-radius:0 0 14px 14px;
   box-shadow:0 8px 18px -10px rgba(0,0,0,.75)}
-header .head-in{max-width:var(--app-w);margin:0 auto;padding:8px 16px 9px}
 header #filters{overflow:hidden;max-height:0;opacity:0;
   transition:max-height .14s ease, opacity .12s ease}
 header:hover #filters, header:focus-within #filters, header.pin #filters{
@@ -305,8 +305,8 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
   border-radius:1px;background:var(--dim2)}
 </style>
 
-<header>
-  <div class="head-in">
+<div id="app">
+  <header>
     <div class="tabs">
       <div class="tab on" data-tab="all">横断検索</div>
       <div class="tab" data-tab="skills">スキル</div>
@@ -330,9 +330,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
     </div>
     <div class="summary" id="summary"></div>
     <div id="filters"></div>
-  </div>
-</header>
-<div id="app">
+  </header>
   <div id="out"></div>
 </div>
 
