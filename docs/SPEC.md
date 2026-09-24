@@ -1,9 +1,8 @@
 # poe2db 横断検索 実装仕様書
 
-対象読者: 実装担当（Claude Opus）。本書だけで実装を始められることを目標にする。
-前提資料: [DATA_PIPELINE.md](DATA_PIPELINE.md)（データ取得・結合・翻訳の知見）。
-**旧プロトタイプのコードは手元に無い。** DATA_PIPELINE.md に書かれている `fetch_data.py` / `build_db.py` / `parsers.py` 等は
-「こういう設計で動いていた」という記録であり、**全てゼロから再実装する**。
+本書は poe2db の決定事項とその理由をまとめたもの。実装はこのリポジトリにあり、**挙動の正はコードと `tests/`**。
+本書とコードが食い違ったらコードとテストに従い、食い違いをユーザーに伝える（本書はユーザーの指示があったときだけ更新する）。
+前提資料: [DATA_PIPELINE.md](DATA_PIPELINE.md)（データ取得・結合・翻訳の知見。失われた旧プロトタイプの設計記録）。
 
 作成日: 2026-09-17　対象パッチ: `4.5.5.2`（本書の数値は全てこのパッチの実データで確認済み）
 
@@ -14,7 +13,7 @@
 | 項目 | 決定 |
 |---|---|
 | 目的 | poe2db.tw の代替。ビルド検討時に 1 日数百回引く検索を、ローカルで即時・自分好みの絞り込みで行う |
-| データ種別（kind） | `unique` / `notable` / `ascendancy` / `mod` / `socketable` / `gem`（スキル・サポート・リネージュサポート・スピリット）/ `timeless`（タイムレスジュエルの変化パッシブ）の 7 種。**石の拳（Hand Wraps）変化**と**培養のオーブ（Vaal Cultivation Orb）**は `mod` の sub_kind と `unique` への付加情報として扱う（§6.7, §6.8） |
+| データ種別（kind） | `unique` / `notable` / `ascendancy` / `mod` / `socketable` / `gem`（スキル・サポート・リネージュサポート・スピリット）/ `timeless`（タイムレスジュエルの変化パッシブ）/ `keystone` / `keyword`（ゲーム内の用語解説）の 9 種。**石の拳（Hand Wraps）変化**と**培養のオーブ（Vaal Cultivation Orb）**は `mod` の sub_kind と `unique` への付加情報として扱う（§6.7, §6.8） |
 | 言語 | 日英両方を保持し、両方で検索できる。表示は「訳があれば日本語、無ければ `EN` 印つき英語」 |
 | 真実の置き場 | `poe2db.sqlite`（正規化テーブル + 検索用 `search_docs`） |
 | 検索 UI | 単一 HTML ファイル（`poe2db.html`）。データは HTML に埋め込み、`file://` で開けてブラウザ内メモリ検索。サーバ不要 |
@@ -38,6 +37,7 @@
 | `socketable` | ルーン・ソウルコア等、ソケットに装着するもの。**装着先クラスごとの効果**を持つ | 313 | repoe `base_items.json`(`item_class=SoulCore`) + GGPK `SoulCores*` テーブル |
 | `gem` | スキルジェム。`sub_kind` = `active`（スキル）/ `support`（サポート）/ `lineage`（**リネージュサポート**。`skill_gems[].tags ∋ lineage`）/ `spirit`（スピリットジェム = `gem_type=spirit`）。スキルは**タグ（attack / melee / nova …）で絞り込める専用ページ**を持つ（§8.5） | 1,191（active 505 / support 642 うち lineage 85 / spirit 44） | repoe `skill_gems.json` + `skills.json` + `gem_tags.json` + 言語テーブル |
 | `timeless` | **タイムレスジュエルの変化パッシブ**（Heroic Tragedy = Kalguuran、Undying Hate = Abyss）。ノータブル・キーストーンの置換候補 | Kalguuran 40 / Abyss 36 | GGPK `AlternatePassiveSkills` + `AlternateTreeVersions` |
+| `keyword` | ゲーム内の**用語解説**（スタン閾値など）。本文マークアップ `[Key\|Text]` の `Key` がこの `Id` を指し、UI はクリックで解説を開く | 770 | GGPK `KeywordPopups` |
 | `mod` の sub_kind `handwraps` | **石の拳**（Monk アセンダンシー Martial Artist のノード "Way of the Stonefist"）で手袋が Hand Wraps 化したときの**変化後 mod**。元 mod との対応を持つ。ユニーク手袋の各行にも変化後を付ける | 598（prefix 213 / suffix 198 / unique 187） | repoe `mods.json` の ID 接頭辞 `HandWraps` |
 | `mod` の sub_kind `cultivation` | **培養のオーブ**（Vaal Cultivation Orb）でユニークの mod を置き換える**専用 mod プール**。ユニーク側には「この行は置換対象」の印を付ける | 204 + 置換対象元 mod 242 | repoe `mods.json` の ID 接頭辞 `UniqueMutatedVaal` + GGPK `Incursion2MutatedUniqueModsClient` |
 
@@ -66,8 +66,8 @@
 
 ```
 [取得]                                  [構築]                    [出力]
-fetch_data.py ──→ data/               build_db.py ──→ poe2db.sqlite ──→ export_web.py ──→ poe2db.html
-  ├ repoe-fork  *.json                   │                                └→ search_index.json（デバッグ用）
+fetch_data.py ──→ data/               build_db.py ──→ poe2db.sqlite ──→ export_web.py ──→ web_data.json
+  ├ repoe-fork  *.json                   │                                  build_web.py ──→ poe2db.html
   ├ ggpk.exposed *.csd                   │
   ├ PoB uniques                          └ parsers.py（csd / PoB / 正規化 / ハンドラ）
   └ pathofexile-dat → datexport/tables/{English,Japanese}/*.json
@@ -82,6 +82,8 @@ poe2db/
 ├── fetch_data.py
 ├── build_db.py
 ├── export_web.py
+├── build_web.py     web_data.json を template.html に埋め込んで poe2db.html を出す
+├── fetch_images.py  アイコン PNG を images/ に取得（任意。無ければ URL にフォールバック）
 ├── search.py
 ├── parsers.py       .csd パーサ / ハンドラ / PoB パーサ / 正規化
 ├── slots.py         item_class → slot の対応表（§4.2）。**データではなくコードで持つ**
@@ -147,7 +149,9 @@ PoB ユニーク定義（S4）の実フォーマット: `https://repoe-fork.gith
 | `Mods` | `Id` | 上記の foreignrow を mod ID 文字列に戻すため |
 | `UniqueOrigins` | `Unique, Origin` | **ユニークの起源（文化）**。`Unique` → `Words.Text`（英名）、`Origin` → `Origin.Id`。実測 126 行（Ezomyte 64 / Vaal 48 / Kalguuran 14）、repoe の 441 ユニーク中 114 件に起源あり。**`Origin == 'Vaal'` が「Vaal Unique」（培養のオーブで mod 置換できるユニーク）の定義**。§6.7 |
 | `Origin` | `Id` | `Kalguuran` / `Ezomyte` / `Vaal` の 3 行 |
-| `ActiveSkills` | `Id, DisplayedName, ShortDescription, Description` | スキルの日本語説明（DATA_PIPELINE.md §6.5 のとおり `Id == active_skill.id`） |
+| `ActiveSkills` | `Id, DisplayedName, ShortDescription, Description, WeaponRequirements` | スキルの日本語説明（DATA_PIPELINE.md §6.5 のとおり `Id == active_skill.id`）。`WeaponRequirements` は装備条件（§6.8） |
+| `ActiveSkillWeaponRequirement` | `Id, WieldableClasses` | 装備条件の組（例 `Any Mace` → 片手メイス / 両手メイス）。`WieldableClasses` は行番号配列 |
+| `WieldableClasses` | `ItemClass` | → `ItemClasses` の行番号 |
 | `GemEffects` | `Id, Name, SupportName, SupportText` | サポートジェムの日本語説明（英文 `SupportText` == `skills[].support_gem` の説明文で結合） |
 | `GemTags` | `Id, Name` | ジェムタグの日本語（`[Fire|火]` → `火`）。67 行 |
 | `AlternateTreeVersions` | `ConquerorType` | タイムレスジュエルの種別。8 行（PoE1 レガシー含む）。**PoE2 で使うのは `Kalguuran`（index 6）と `Abyss`（index 7）のみ** |
@@ -163,11 +167,12 @@ PoB ユニーク定義（S4）の実フォーマット: `https://repoe-fork.gith
 | `SoulCoreLimits` | `Id, Limit, Text` | 装着数制限の説明文 |
 | `Stats` | `Id` | `SoulCoreStats.Stats` 等の **foreignrow（行番号）を stat ID 文字列に戻す**ために必須 |
 | `ClientStrings2` | `Id, Text` | `SoulCores.Description` の解決先 |
+| `KeywordPopups` | `Id, Term, Definition` | 用語解説（`kind=keyword`）。本文マークアップの `Key` の 99.7% がこの `Id` に解決する |
 | `BaseItemTypes`, `Words`, `UniqueStashLayout` | 従来どおり | 名前の日本語化 |
 
 `pathofexile-dat` の出力では **foreignrow は参照先テーブルの行番号（整数 or null）、配列列は整数配列**で出る。参照先テーブルも同時に export し、行番号で引く。`_index` で EN/JA を対応付ける（同一テーブルは言語間で行数・順序が一致する。DATA_PIPELINE.md §2.3）。
 
-スキーマ確認用: `https://github.com/poe-tool-dev/dat-schema/releases/download/latest/schema.min.json` の `tables[]` で `validFor` が `2`（PoE2）または `3`（両方）のもの。上記列名はこのスキーマで確認済み。列が無い・名前が違う場合はスキーマを見て直し、本書を更新する。
+スキーマ確認用: `https://github.com/poe-tool-dev/dat-schema/releases/download/latest/schema.min.json` の `tables[]` で `validFor` が `2`（PoE2）または `3`（両方）のもの。上記列名はこのスキーマで確認済み。列が無い・名前が違う場合はスキーマを見て直す。
 
 ### 3.3 `.csd`（S3）で追加で確実に読むもの
 
@@ -187,7 +192,7 @@ PoB ユニーク定義（S4）の実フォーマット: `https://repoe-fork.gith
 ```jsonc
 {
   "id":       "unique:Astramentis",         // "<kind>:<内部キー>"。全体で一意
-  "kind":     "unique",                      // unique | notable | keystone | ascendancy | mod | socketable | gem | timeless
+  "kind":     "unique",                      // unique | notable | keystone | ascendancy | mod | socketable | gem | timeless | keyword
   "sub_kind": "",                            // mod: "prefix"|"suffix"|"corrupted"|"essence"|"desecrated" / socketable: SoulCoreTypes.Name / ascendancy: "notable"|"small"|"start"
   "slots":    ["amulet"],                    // §4.2 の slot ID。unique=装備部位(1つ) / mod=付き得るクラス(複数) / socketable=装着先(複数) / notable,ascendancy=[]
   "name_en":  "Astramentis",
@@ -263,6 +268,7 @@ PoB ユニーク定義（S4）の実フォーマット: `https://repoe-fork.gith
 ## 5. SQLite スキーマ
 
 正規化テーブル（kind ごと）と、それを射影した `search_docs` の 2 層。UI/CLI は `search_docs` だけ読む。正規化テーブルは再集計・デバッグ・将来の kind 追加のために持つ。
+DDL の正は `schema.sql`。下は設計の説明用。
 
 ```sql
 -- 共通
@@ -276,7 +282,8 @@ CREATE TABLE base_items (id TEXT PRIMARY KEY, name_en TEXT, name_ja TEXT, item_c
 -- kind: unique
 CREATE TABLE uniques (id TEXT PRIMARY KEY, name_en TEXT, name_ja TEXT, item_class TEXT, slot TEXT,
                       base_item_en TEXT, base_item_ja TEXT, base_item_id TEXT, has_stats INT,
-                      implicits_json TEXT, stats_json TEXT, is_alternate_art INT);
+                      implicits_json TEXT, stats_json TEXT, is_alternate_art INT,
+                      origin TEXT, is_vaal_unique INT, cultivation_target INT);   -- §6.7
 
 -- kind: notable / ascendancy（同じテーブル。ascendancy_id が NULL なら通常ツリー）
 CREATE TABLE passives (hash INT PRIMARY KEY, node_id TEXT, name_en TEXT, name_ja TEXT,
@@ -320,10 +327,16 @@ CREATE TABLE timeless_passives (id TEXT PRIMARY KEY, jewel TEXT, name_en TEXT, n
                                 conqueror_index INT, spawn_weight INT, stats_json TEXT, lines_json TEXT,
                                 flavour_en TEXT, flavour_ja TEXT, icon TEXT);
 
+-- kind: keyword（用語解説）
+CREATE TABLE keywords (id TEXT PRIMARY KEY, term_en TEXT, term_ja TEXT,
+                       definition_en TEXT, definition_ja TEXT);
+
 -- 検索層
 CREATE TABLE search_docs (id TEXT PRIMARY KEY, kind TEXT, sub_kind TEXT, slots TEXT,   -- slots はカンマ区切り
                           name_en TEXT, name_ja TEXT, group_en TEXT, group_ja TEXT,
-                          lines_json TEXT, meta_json TEXT, haystack TEXT, sort_key INT);
+                          lines_json TEXT, meta_json TEXT, haystack TEXT, sort_key INT,
+                          icon TEXT,       -- `Art/` を除いた .dds パス（§12-A）
+                          hay_hw TEXT);    -- 石の拳の変化後本文だけの haystack（§6.6）
 CREATE INDEX idx_search_kind ON search_docs(kind);
 CREATE VIRTUAL TABLE search_fts USING fts5(id UNINDEXED, haystack, tokenize='trigram');
 ```
@@ -389,7 +402,7 @@ CREATE VIRTUAL TABLE search_fts USING fts5(id UNINDEXED, haystack, tokenize='tri
 3. **付く装備（`mod_applies_to`）**: `mods_by_base.json` を走査し、`{クラス表示名 → タグ組 → gen_type → mod_group → mod_id → required_level}` を **mod_id をキーに反転**する
    - クラス表示名（`Helmets`, `Body Armours`, `Charms`, `Jewels`, `Talismans` …）は `item_classes.json[*].name` と一致するので、それで `item_class` ID に戻し、`slots.py` で slot に落とす
    - タグ組（例 `str_armour,helmet,armour,default`）はそのまま `tagset` に保存。UI の詳細で「STR 兜のみ」のような補足に使う。**同じクラスに複数タグ組があれば、そのクラスに付く mod は和集合**
-   - `applies_to` が空の mod（どのベースにも付かない）は `sub_kind` に関わらず収録するが、UI で「付く装備なし」と表示
+   - `applies_to` が空の mod も収録する。ユニークの性能行と対応が付く mod は `meta.on_uniques` に載るユニークを持ち、UI はバッジで出す（ユニーク名は `haystack` に入れない。入れると「憤怒」で『アスフィクシアの憤怒』の mod が全部当たる）。付く装備も載るユニークも分からない mod は `meta.orphan` とし、UI では既定で伏せる（「出所不明」チップ / `src:unknown`）
 4. `meta.stat_ranges` に `stats[].{id,min,max}` を保持（tier 比較に使える）
 
 `spawn_weights` から自前で計算するのではなく **`mods_by_base` を正とする**（repoe 側が `base_items.tags` との照合を済ませている）。ただし検証として、`spawn_weights` に `weight > 0` のタグを持つのに `mods_by_base` に一度も現れない item ドメイン mod の件数をログに出す。
@@ -421,10 +434,10 @@ CREATE VIRTUAL TABLE search_fts USING fts5(id UNINDEXED, haystack, tokenize='tri
 2. **元 mod との対応**: ID から `HandWraps` を剥がした文字列が元 mod の ID（例 `HandWrapsStrength1` → `Strength1`、`HandWrapsUniqueIncreasedLife9` → `UniqueIncreasedLife9`）。実測 588/598 が存在。存在しない 10 件（`HandWrapsImplicit…` 3 件、`HandWrapsLocal…7` 系など）は `transforms_from = NULL` のまま収録し、ID をログに出す
 3. 元 mod 側に `handwraps_id` を書く（逆参照）。元 mod が `sub_kind=cultivation` のもの（`HandWrapsUniqueMutatedVaal…` 28 件）も同様に対応付ける
 4. `SearchDoc` への射影:
-   - handwraps mod の `lines` = 変化後本文、`meta.transforms_from` = 元 mod の `{mod_id, en, ja}`。`haystack` には**元 mod の本文も含める**（「Strength で検索 → Hand Wraps 化で AoE になる」が引ける）
+   - handwraps mod の `lines` = 変化後本文、`meta.transforms_from` = 元 mod の `{mod_id, en, ja}`。`haystack` には**変化後本文だけを入れ、元 mod の本文は入れない**（入れると同じ語で元 mod と変化後 mod が二重に出る）。文が元 mod と全く同じになる「変化」は載せない
    - 通常 mod の `meta.handwraps` = `{mod_id, en, ja}`。`haystack` には変化後本文を**含めない**（通常 mod 検索が汚れないように。UI では詳細に「石の拳: …」を出す）
    - `applies_to`: handwraps mod は `spawn_weights` が空なので `mods_by_base` に現れない。**元 mod の `applies_to` をそのままコピー**する（元が手袋に付くなら変化後も手袋）。元が無い 10 件は `[{slot: gloves}]` 固定
-5. **ユニーク手袋**: §6.1 手順 7 で `mod_id` が付いた行のうち、その mod に `handwraps_id` があるものに `lines[*].handwraps = {mod_id, en, ja}` を付ける。実測 177 行。ユニーク側の `haystack` には変化後本文を**含める**（ユースケース 5 は「変化後の性能で探す」が主）が、UI では変化後本文でヒットした行に「石の拳」バッジを出して区別する
+5. **ユニーク手袋**: §6.1 手順 7 で `mod_id` が付いた行のうち、その mod に `handwraps_id` があるものに `lines[*].handwraps = {mod_id, en, ja}` を付ける。実測 177 行。変化後本文はユニークの `haystack` とは**別枠（`search_docs.hay_hw`）**に持ち、既定では検索対象に含める（ユースケース 5 は「変化後の性能で探す」が主）。石の拳はマーシャルアーティスト専用なので、`hw:off` で変化後本文への一致と専用 mod をまとめて外せる（§7.1、§8.2）。変化後本文だけで当たった行は、トグルに関係なく `→ 変化後` を出して一致の理由を見せる
 6. slot: handwraps mod の `slots` は元 mod と同じ（実質 `gloves`, `armour`）
 
 ### 6.7 培養のオーブ（Vaal Cultivation Orb）— `mod.sub_kind = cultivation` + ユニークへの付加
@@ -444,8 +457,8 @@ CREATE VIRTUAL TABLE search_fts USING fts5(id UNINDEXED, haystack, tokenize='tri
 
 1. `skill_gems.json` の全件（1,191。全て `release_state=released`）。`base_item.display_name` を英名、`BaseItemTypes`（S5）を Metadata パスで引いて日本語名
 2. `sub_kind`: `gem_type == 'spirit'` → `spirit` / `gem_type == 'support'` かつ `tags ∋ lineage` → `lineage` / `support` → `support` / `active` → `active`
-3. スキル本体: `grants_skills[0]` で `skills.json` を引く。`active_skill.types` を `skill_types` に、`weapon_restrictions` を保持
-4. 説明文: active は `ActiveSkills`（`Id == active_skill.id`）の `ShortDescription` / `Description`（EN/JA）。support は `skills[].support_gem` の英文（旧プロトでは `skill_gems[].support_text`。**repoe の現行構造では `skills.json` 側の `support_gem` にある**ので実データで位置を確認する）を `GemEffects.SupportText` 英文完全一致で JA へ
+3. スキル本体: `grants_skills[0]` で `skills.json` を引く。`active_skill.types` を `skill_types` に。装備条件（片手メイス / 両手メイス …）は repoe には無い（`weapon_restrictions` は常に空）ので、GGPK `ActiveSkills.WeaponRequirements` → `ActiveSkillWeaponRequirement.WieldableClasses` → `WieldableClasses.ItemClass` → `ItemClasses` で引く。名前の無いクラス（`Unarmed`）は用語解説の訳（素手）を使う。ラベルは `haystack` に入れる（「メイス」で引ける）
+4. 説明文: active は `ActiveSkills`（`Id == active_skill.id`）の `ShortDescription` / `Description`（EN/JA）。support は `skill_gems[].support_text` の英文を `GemEffects.SupportText` 英文完全一致で JA へ（`skills[].support_gem` には説明文が無い。こちらを読むと訳率が約 40% に落ちる）
 5. 効果詳細（`detail`）: `stat_sets[].static.stat_text` と `per_level["1"|"20"].stat_text` を `.csd`（`translation_file` 指定 → 汎用 3 本 → 統合）で JA 化。**§6.4 の英語再レンダリング検証を必ず掛ける**（旧プロトで誤訳が出た箇所）。`quality_stats` は初版も非表示
 6. タグ: `skill_gems[].tags` をそのまま `tags`。表示名は `gem_tags.json`（EN）/ `GemTags.Name`（JA）からマークアップを剥がして `gem_tags` テーブルに。`grants_active_skill` `support` `meta` `low_max_level` `exceptional` `awakened` `vaal` `link` は**内部タグなので UI のチップからは除外**（検索 haystack にも入れない）
 7. `recommended_supports[]` は Metadata パス → 名前 EN/JA に解決して保持（スキル詳細で「推奨サポート」を出す）
@@ -490,6 +503,8 @@ UI はユニークのグループ内で部位が変わる位置に小見出し�
 | `sub:prefix` `sub:keystone` `sub:handwraps` `sub:cultivation` | sub_kind 絞り込み |
 | `asc:Warrior3` または `asc:"Smith of Kitava"` | アセンダンシー絞り込み |
 | `hw:yes` | Hand Wraps 版がある mod / Hand Wraps 変化行を持つユニークだけ（ユースケース 5） |
+| `hw:off` | 石の拳を検索から外す（`sub_kind=handwraps` の mod を出さず、ユニークの変化後本文にも当てない） |
+| `src:known` `src:unknown` | 出所（付く装備か載るユニーク）が分かる mod だけ / 分からないものだけ |
 | `cult:yes` | 培養の置換対象行を持つ Vaal ユニーク（`cultivation_target`）/ 置換対象の元 mod だけ（ユースケース 6） |
 | `origin:vaal` `origin:ezomyte` `origin:kalguuran` | ユニークの起源で絞り込み |
 | `tag:melee` `tag:melee,nova` | ジェムのタグで絞り込み（カンマは **AND**。`tag:melee tag:nova` も同じ） |
@@ -587,15 +602,16 @@ python search.py -k mod "chance to Ignite" --json
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- 結果は **kind ごとの折りたたみグループ**。見出しに件数。既定は全グループ展開、各グループ最大 50 件 + 「さらに表示」
+- 結果は **kind ごとの折りたたみグループ**。見出しに件数。既定は全グループ展開。件数・行数は省略しない（§12-B）
 - 各行: 名前（JA。無ければ EN に `EN` バッジ）、右に slot バッジ、下に本文。**ヒット語をハイライト**
 - 行クリックで詳細展開（implicit、`meta`、EN/JA 併記、mod なら `applies_to` の tagset と required_level、socketable なら effects をカテゴリ別に）
 - 「付く装備」の slot バッジをクリックすると、その slot で絞り込み（ユースケース 4 → 3 への接続）
 - 表示言語トグル: `JA`（訳があれば JA、無ければ EN）/ `EN` / `両方`（並記）
-- **石の拳トグル**（ヘッダに `拳` スイッチ）: ON にすると
-  - ユニーク手袋の行のうち `handwraps` を持つものは、元の行の下に `→ 変化後本文` を常時表示（OFF 時は詳細展開でのみ）
-  - kind=mod のフィルタに `handwraps` チップが現れ、変化後 mod は「`元本文` → `変化後本文`」の 2 段で表示
-  - 変化後本文でヒットした結果には「石の拳」バッジ
+- **石の拳チップ**（`拳`）: 押すたびに 通常 → 石の拳のみ → 石の拳を除外 と切り替わる（URL `hw=1` / `hw=off`。⚙ で「既定で除外」にできる）
+  - 通常: ユニークの `→ 変化後本文` は、詳細を開いたときと、検索語が変化後本文に当たったときに出す
+  - 石の拳のみ: 石の拳が絡むもの（変化後 mod、変化を持つ元 mod・ユニーク）だけ。`→ 変化後本文` を常に出す
+  - 除外: 変化後 mod を出さず、変化後本文にも当てない。`→ 変化後本文` も出さない
+  - 変化後 mod には「石の拳」バッジ。mod の sub_kind チップにも「石の拳」がある
 - **培養トグル**（`培` スイッチ）: ON にすると
   - Vaal ユニークは名前横に「Vaal」バッジ、その各行に置換対象なら `◆` 印。非 Vaal ユニークには「オーブ使用 → 同クラスの Corrupted Vaal Unique に置換」の注記のみ
   - kind=mod のフィルタに `cultivation` チップ。プール mod は slot 無しで一覧
@@ -603,14 +619,14 @@ python search.py -k mod "chance to Ignite" --json
 ### 8.3 操作
 
 - 入力は 50ms デバウンス。**Enter 不要**
-- `/` で検索ボックスにフォーカス、`Esc` でクリア、`↑↓` で行移動、`Enter` で詳細展開、`1`〜`5` で kind トグル
+- `/` で検索ボックスにフォーカス、`Esc` でクリア、`↑↓` で行移動、`Enter` で詳細展開、`1`〜`9` で kind トグル
 - 状態（クエリ・kind・slot・言語）を URL ハッシュに保持 → ブラウザの戻る/進む・ブックマークが効く
 - 検索ボックス右に「N 件 / 12ms」を出す（性能劣化に気づくため）
 
 ### 8.4 表示規則
 
 - 「訳があれば日本語のみ、無ければ `EN` 印付き英語」は 1 関数（`pickText(line, lang)`）に集約し、全 kind で同じ規則
-- 英文マークアップ `[Key|Text]` は表示前に剥がす（`haystack` だけでなく `lines` にも）。剥がす処理は **ビルド時に済ませて** `lines` には剥がした文を入れる。元文が要るなら `meta` に
+- 英文マークアップ `[Key|Text]` は `lines` に**残す**。UI は `Text` を表示し、`Key` を用語解説（`kind=keyword`）へのリンクにする。`haystack` と CLI 表示（`strip_markup`）では剥がす
 
 ---
 
@@ -716,7 +732,7 @@ python search.py -k mod "chance to Ignite" --json
 | T5 | ユニーク slot | `Astramentis` の `slots == ["amulet","jewellery"]`。`item_class=Charm` のユニークが 12 件で全て `slots ∋ charm`、`Flask` が 6 件、`Jewel` が 15 件 |
 | T6 | 大小・全半角 | `search("RAGE")` と `search("rage")` と `search("ｒａｇｅ")` が同じ結果 |
 | T7 | 2 文字クエリ | `search("憤怒")` が空でない（FTS trigram の落とし穴） |
-| T8 | 訳率 | `unique.name_ja` ≥ 95%、`mod.text_ja` ≥ 90%、`notable.name_ja` ≥ 90%（初回計測後に閾値を本書に追記） |
+| T8 | 訳率 | `unique.name_ja` ≥ 95%、`mod.text_ja` ≥ 90%、`notable.name_ja` ≥ 90% |
 | T9 | 誤訳ガード | `.csd` 統合フォールバックで採用した訳は、英語再レンダリングが `normalize()` 後に元英文と一致している（サンプリング 100 件） |
 | T10 | 除外 | `search("")` の ascendancy に `disabled` なアセンダンシー、名前空ノードが含まれない |
 | T11 | ハンドラ | `.csd` の `divide_by_ten_1dp_if_required` が効いている（`17m` ではなく `1.7m` になる例を 1 つ固定） |
@@ -745,7 +761,7 @@ python search.py -k mod "chance to Ignite" --json
 | M5 | `unique_lines`（§6.1 手順 7）+ 石の拳（§6.6）+ 培養（§6.7）+ UI トグル | T12〜T15 が通る。ユースケース 5, 6 が動く |
 | M6 | `gem`（§6.8）+ スキル専用ページ（§8.5） | T16, T17, T19 が通る。ユースケース 7, 8 が動く |
 | M7 | `timeless`（§6.9） | T18 が通る。ユースケース 9 が動く |
-| M8 | 訳率の計測と T8 閾値確定、T9、T11、ハイライト・キーボード操作・URL 状態 | 全テスト緑。`docs/SPEC.md` の数値を実測に更新 |
+| M8 | 訳率の計測と T8 閾値確定、T9、T11、ハイライト・キーボード操作・URL 状態 | 全テスト緑 |
 | M9 | §11 の未確定項目のうちユーザー回答が要るもの | 回答後 |
 
 ---
@@ -789,7 +805,7 @@ DATA_PIPELINE.md §10 の全項目に加えて:
 | `HandWraps` mod が `mods_by_base` に無い | `spawn_weights` が空（実体は元 mod 経由で付く） | `applies_to` は元 mod からコピー（§6.6） |
 | 培養 mod の置換先が分からない | 元 mod → 置換先の対応表はデータに無い（プール抽選） | 対応を捏造しない。プール検索と置換対象印まで（§6.7） |
 | Windows で Python の `print` に日本語を出すと化ける | 標準出力が cp932 | `PYTHONIOENCODING=utf-8` を設定。ログもファイルに UTF-8 で書く |
-| `pathofexile-dat` の実行 | 初回はバンドル索引の取得で 1〜2 分。パッチ番号は `version.txt` の値をそのまま `config.json.patch` に | 今回 `4.5.5.2` で 8 テーブル × 2 言語が問題なく取れた |
+| `pathofexile-dat` が `Failed to fetch … from CDN` | CDN（`patch-poe2.poecdn.com`）は**最新パッチのバンドルしか置かない**。repoe の `version.txt` はホットフィックスに遅れることがある | `fetch_data.cdn_patch()` が末尾を上げて CDN にある版を探す。使った版は `meta.dat_patch` に残る（repoe 側は `meta.patch_version`） |
 | `pathofexile-dat` を再実行すると前回の出力が消える | `datexport/tables/` を毎回作り直す | **`config.json` には必要な全テーブルを常に書く**（分割実行しない） |
 | `AlternatePassiveSkills` に PoE1 のタイムレス（Vaal / Eternal / Templar …）が混ざる | ゲームファイルにレガシーが残っている | `AlternateTreeVersions.ConquerorType in ('Kalguuran','Abyss')` で絞る（§6.9） |
 | ジェムの `tags` に `nova` があるのに `active_skill.types` に無い | 表示用タグ（`skill_gems.tags`）と内部型（`skills.active_skill.types`）は別物 | UI のチップは `tags`、`type:` は補助（§6.8） |
@@ -813,7 +829,7 @@ DATA_PIPELINE.md §10 の全項目に加えて:
 
 ## 12-B. 表示の省略について
 
-結果は**件数でも行数でも省略しない**（SPEC 初版にあった「各グループ最大 50 件」「本文 4 行」は撤回）。
+結果は**件数でも行数でも省略しない**。
 
 - 効果行は常に全行出す
 - 一覧は下端に近づくと 1,500 件ずつ描き足す。全 12,552 件を一度に描いても **276ms / HTML 5.7MB**
