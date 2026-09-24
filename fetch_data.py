@@ -50,7 +50,12 @@ DAT_TABLES = [
     ("UniqueStashLayout", ["WordsKey", "ItemVisualIdentityKey"]),
     ("UniqueOrigins", ["Unique", "Origin"]),
     ("Origin", ["Id"]),
-    ("ActiveSkills", ["Id", "DisplayedName", "ShortDescription", "Description"]),
+    ("ActiveSkills", ["Id", "DisplayedName", "ShortDescription", "Description",
+                     "WeaponRequirements"]),
+    # スキルの武器要求（「片手メイス, 両手メイス」など）。
+    # ActiveSkills → ActiveSkillWeaponRequirement → WieldableClasses → ItemClasses
+    ("ActiveSkillWeaponRequirement", ["Id", "WieldableClasses"]),
+    ("WieldableClasses", ["ItemClass"]),
     ("GemEffects", ["Id", "Name", "SupportName", "SupportText"]),
     ("GemTags", ["Id", "Name"]),
     ("PassiveSkills", ["Id", "Name", "FlavourText", "PassiveSkillGraphId",
@@ -195,6 +200,35 @@ def fetch_pob(force: bool) -> None:
     log(f"      {len(blocks)} unique blocks")
 
 
+#: GGPK バンドルの置き場。古いパッチはホットフィックスが出ると消える
+CDN = "https://patch-poe2.poecdn.com/{patch}/Bundles2/_.index.bin"
+
+
+def cdn_patch(version: str) -> str:
+    """CDN に実物がある一番近いパッチ番号を返す.
+
+    repoe-fork の version.txt はホットフィックス（4.5.5.2 → 4.5.5.3）に
+    遅れることがある。CDN は最新パッチしか置いていないので、無ければ
+    末尾を 1 つずつ上げて探す。見つからなければ元の番号のまま返す
+    （キャッシュ済みなら export は通る）。
+    """
+    parts = version.split(".")
+    if not parts[-1].isdigit():
+        return version
+    for bump in range(0, 10):
+        cand = ".".join(parts[:-1] + [str(int(parts[-1]) + bump)])
+        try:
+            if requests.head(CDN.format(patch=cand), headers=UA,
+                             timeout=20).status_code == 200:
+                if bump:
+                    log(f"      CDN は {cand}（repoe は {version}）")
+                return cand
+        except requests.RequestException:
+            break
+    log(f"      !! CDN に {version} 系のバンドルが無い。キャッシュで試す")
+    return version
+
+
 def fetch_dat(version: str, force: bool) -> None:
     log("[5/6] pathofexile-dat (GGPK language tables)")
     marker = DATEXPORT / "tables" / "Japanese" / "BaseItemTypes.json"
@@ -203,7 +237,7 @@ def fetch_dat(version: str, force: bool) -> None:
         return
     DATEXPORT.mkdir(parents=True, exist_ok=True)
     cfg = {
-        "patch": version,
+        "patch": cdn_patch(version),
         "translations": ["English", "Japanese"],
         "tables": [{"name": n, "columns": c} for n, c in DAT_TABLES],
     }

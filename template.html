@@ -197,6 +197,7 @@ mark{background:var(--mark-bg);color:var(--hit);padding:0 1px;border-radius:2px;
 .slotbtn{cursor:pointer;text-decoration:underline dotted}
 .slotbtn:hover{color:var(--accent)}
 .arrow-hw{color:var(--hit)}
+.weap{margin:3px 0 0;color:var(--dim);font-size:var(--fs-xs)}
 
 /* 列幅を宣言どおりにするため fixed。auto だと概要の長文に名前列が潰される */
 table.skills{width:100%;border-collapse:collapse;margin-top:10px;font-size:var(--fs-s);
@@ -710,6 +711,15 @@ function bodyLines(d){
   return (d[F.LINES] || []).map(stat);
 }
 
+/* ジェムの装備条件（片手メイス …）。検索語がそこに当たっているときだけ一覧に出す */
+function weaponHint(d){
+  const w = d[F.META].weap;
+  if (!w || !w[0] || !w[0].length) return '';
+  const en = w[0].join(', '), ja = (w[1] || []).join(', ');
+  if (!hitsTerm(en + ' ' + ja)) return '';
+  return `<p class="weap">装備条件: ${mk(pick(en, ja)[0])}</p>`;
+}
+
 function slotBadges(ids){
   return ids.filter(s => !['weapon','armour','jewellery'].includes(s))
     .map(s => `<span class="badge slotbtn" data-slot="${s}">` +
@@ -772,6 +782,7 @@ function rowHTML(d, idx){
     lines += `<li class="${cls}">${mk(txt)}${enTag}${extra}</li>`;
   }
   if (open) lines += '</ul>';
+  if (d[F.KIND] === 'gem') lines += weaponHint(d);
 
   const detail = st.open.has(d[F.ID]) ? detailHTML(d) : '';
   const ico = iconHTML(d, 'ico');
@@ -914,7 +925,8 @@ function detailHTML(d){
     const info = [];
     if (m.req && m.req.some(x => x)) info.push(['属性配分', `STR ${m.req[0]}% / DEX ${m.req[1]}% / INT ${m.req[2]}%`]);
     if (m.cast) info.push(['キャスト時間', m.cast + ' ms']);
-    if (m.weap && m.weap.length) info.push(['武器制限', m.weap.join(', ')]);
+    if (m.weap && m.weap[0] && m.weap[0].length)
+      info.push(['装備条件', pick(m.weap[0].join(', '), (m.weap[1] || []).join(', '))[0]]);
     if (m.rec && m.rec.length) info.push(['推奨サポート', m.rec.join(', ')]);
     if (m.types && m.types.length) info.push(['内部型', m.types.join(', ')]);
     if (info.length) h += kvSection('情報', info);
@@ -1170,7 +1182,7 @@ function renderSkills(all){
       <td><span class="dot c-${m.color || 'w'}"></span>${(m.color || '').toUpperCase()}</td>
       <td>${m.lvl || ''}</td>
       <td class="tagline">${(m.tags || []).map((t,i) => esc(st.lang === 'en' ? t : ((m.tja && m.tja[i]) || t))).join(' ')}</td>
-      <td>${textCell((m.sum && m.sum[0]) || (m.desc && m.desc[0]) || '', (m.sum && m.sum[1]) || (m.desc && m.desc[1]) || '')}</td></tr>`;
+      <td>${textCell((m.sum && m.sum[0]) || (m.desc && m.desc[0]) || '', (m.sum && m.sum[1]) || (m.desc && m.desc[1]) || '')}${weaponHint(d)}</td></tr>`;
     if (open) h += `<tr><td colspan="5">${detailHTML(d)}</td></tr>`;
     idx++;
   }

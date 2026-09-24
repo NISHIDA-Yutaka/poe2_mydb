@@ -893,8 +893,34 @@ class Builder:
         log(f"  socketables: {len(rows)} (ja {n_ja / max(len(rows),1):.1%}), "
             f"effects {len(eff_rows)}")
 
+    def _weapon_requirements(self) -> dict[str, list[str]]:
+        """スキル id -> 装備条件の item_class id 一覧（「片手メイス, 両手メイス」）.
+
+        ActiveSkills.WeaponRequirements -> ActiveSkillWeaponRequirement
+        -> WieldableClasses -> ItemClasses（SPEC §3.2 の S5）。
+        """
+        wieldable = [r.get("ItemClass") for r in self.dat.table("WieldableClasses")]
+        classes = self.dat.ids("ItemClasses")
+        reqs = []
+        for row in self.dat.table("ActiveSkillWeaponRequirement"):
+            ids = []
+            for w in (row.get("WieldableClasses") or []):
+                if w is None or w >= len(wieldable):
+                    continue
+                ic = wieldable[w]
+                if ic is not None and ic < len(classes) and classes[ic]:
+                    ids.append(classes[ic])
+            reqs.append(ids)
+        out: dict[str, list[str]] = {}
+        for row in self.dat.table("ActiveSkills"):
+            idx = row.get("WeaponRequirements")
+            if row.get("Id") and idx is not None and idx < len(reqs) and reqs[idx]:
+                out[row["Id"]] = reqs[idx]
+        return out
+
     # ---------------------------------------------------------- 6. ジェム
     def build_gems(self) -> None:
+        weapon_req = self._weapon_requirements()
         act_en = {r.get("Id"): r for r in self.dat.table("ActiveSkills", "English")}
         act_ja = {}
         for a, b in self.dat.pair("ActiveSkills"):
@@ -950,7 +976,7 @@ class Builder:
                          json.dumps(detail, ensure_ascii=False),
                          ",".join(self.base_items.get(s, {}).get("name", "")
                                   for s in (g.get("recommended_supports") or [])),
-                         ",".join(active.get("weapon_restrictions") or [])))
+                         ",".join(weapon_req.get(skill_id, []))))
         self.conn.executemany(
             "INSERT OR REPLACE INTO gems VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
         self.counts["gems"] = len(rows)
@@ -1124,6 +1150,17 @@ class Builder:
                 add(f"{kind}:{h}", kind, kind, [], name_en, name_ja, "", "", lines, meta,
                     extra_hay=[flav_en, flav_ja], icon=icon)
 
+        # 装備条件のラベル。ItemClasses に名前が無いもの（Unarmed など）は
+        # 用語解説（KeywordPopups）の訳を借りる
+        kw_term = {kid: (ten, tja) for kid, ten, tja in
+                   cur.execute("SELECT id, term_en, term_ja FROM keywords")}
+
+        def weapon_label(cls_id: str) -> tuple[str, str]:
+            en, ja = self.class_name.get(cls_id, ("", ""))
+            if not en:
+                en, ja = kw_term.get(cls_id.replace(" ", ""), ("", ""))
+            return en, ja
+
         # mod がどのユニークに載っているかの逆引き（generation_type=unique は
         # mods_by_base に出ないので、これが唯一の出所情報になる）
         mod_on_unique: dict[str, list[dict]] = defaultdict(list)
@@ -1236,12 +1273,24 @@ class Builder:
                     "req_str": rs, "req_dex": rd, "req_int": ri, "level_req": lvl,
                     "cast_time": cast, "summary_en": sum_en, "summary_ja": sum_ja,
                     "desc_en": d_en, "desc_ja": d_ja, "detail": detail,
-                    "recommended_supports": [x for x in rec.split(",") if x],
-                    "weapon_restrictions": [x for x in weap.split(",") if x]}
+                    "recommended_supports": [x for x in rec.split(",") if x]}
+            # 装備条件（片手メイス / 両手メイス …）。検索で「メイス」に当てたいので
+            # ラベルは haystack にも入れる
+            weap_ids, weap_en, weap_ja = [], [], []
+            for w in (x for x in weap.split(",") if x):
+                en, ja = weapon_label(w)
+                if not en:
+                    continue   # Nothing / Thrown Axe など、名前を持たない内部クラス
+                weap_ids.append(w)
+                weap_en.append(en)
+                weap_ja.append(ja or en)
+            meta["weapon_restrictions"] = weap_ids
+            meta["weapon_en"] = weap_en
+            meta["weapon_ja"] = weap_ja
             add(f"gem:{gid}", "gem", sub, [], name_en, name_ja,
                 GEM_GROUP[sub][0], GEM_GROUP[sub][1], lines, meta,
-                extra_hay=label_en + label_ja + shown_tags, sort_key=lvl or 0,
-                icon=self.gem_icon.get(gid, ""))
+                extra_hay=label_en + label_ja + shown_tags + weap_en + weap_ja,
+                sort_key=lvl or 0, icon=self.gem_icon.get(gid, ""))
 
         # timeless
         for r in cur.execute("SELECT * FROM timeless_passives"):
@@ -1285,9 +1334,17 @@ class Builder:
         log(f"  search_docs: {len(docs)} {dict(by_kind)}")
 
     def finish(self) -> None:
+        # GGPK テーブルは CDN に残っているパッチから取る（repoe より先に進むことがある）
+        dat_patch = ""
+        cfg = DATEXPORT.parent / "config.json"   # DATEXPORT は tables/ を指す
+        if cfg.exists():
+            dat_patch = (jload(cfg) or {}).get("patch", "")
+        if dat_patch and dat_patch != self.version:
+            log(f"  GGPK テーブルは {dat_patch}（repoe は {self.version}）")
         self.conn.executemany(
             "INSERT OR REPLACE INTO meta VALUES (?,?)",
             [("patch_version", self.version),
+             ("dat_patch", dat_patch or self.version),
              ("built_at", time.strftime("%Y-%m-%dT%H:%M:%S")),
              ("source_counts", json.dumps(self.counts, ensure_ascii=False))])
         self.conn.commit()

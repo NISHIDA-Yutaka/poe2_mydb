@@ -109,8 +109,9 @@ def trim_meta(kind: str, meta: dict, slot_label) -> dict:
             out["det"] = detail
         if meta.get("recommended_supports"):
             out["rec"] = meta["recommended_supports"]
-        if meta.get("weapon_restrictions"):
-            out["weap"] = meta["weapon_restrictions"]
+        if meta.get("weapon_en"):
+            # 装備条件（片手メイス / 両手メイス …）。表示用に EN / JA の 2 本
+            out["weap"] = [meta.get("weapon_en") or [], meta.get("weapon_ja") or []]
         if meta.get("skill_types"):
             out["types"] = meta["skill_types"]
         return out

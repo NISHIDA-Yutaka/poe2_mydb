@@ -256,12 +256,24 @@ def test_mod_source_attribution(conn, raw):
     assert total >= 1000, total
 
 
-def test_search_hits_are_explainable(conn):
-    """検索結果は、名前か本文にその語があるものだけ（別項目の名前で引っかからない）."""
+def test_search_hits_are_explainable(conn, raw):
+    """検索結果は、一覧に見えている文字からしか当たらない（別項目の名前で引っかからない）."""
+    import slots as SL
     from parsers import normalize_for_search as N
+
+    # 部位バッジ（片手メイス など）は一覧に出るので材料に入れる
+    cls_name = {r[0]: (r[1], r[2]) for r in
+                raw.execute("SELECT id, name_en, name_ja FROM item_classes")}
+    slot_label = {}
+    for cls, slot in SL.CLASS_TO_SLOT.items():
+        en, ja = cls_name.get(cls, ("", ""))
+        if ja or en:
+            slot_label.setdefault(slot, []).append(f"{en} {ja}")
 
     def visible(d):
         parts = [d["name_en"], d["name_ja"], d["group_en"], d["group_ja"]]
+        for sl in d["slots"]:
+            parts += slot_label.get(sl, [])
         parts += [l.get("en", "") + l.get("ja", "") for l in d["lines"]]
         m = d["meta"]
         for l in (m.get("implicits") or []):
@@ -275,6 +287,8 @@ def test_search_hits_are_explainable(conn):
         for k in ("summary_en", "summary_ja", "desc_en", "desc_ja",
                   "flavour_en", "flavour_ja"):
             parts.append(str(m.get(k, "")))
+        # 装備条件（片手メイス …）は一覧にも出るので材料に入れる
+        parts += (m.get("weapon_en") or []) + (m.get("weapon_ja") or [])
         for x in (m.get("detail") or []):
             parts.append(str(x.get("en", "")) + str(x.get("ja", "")))
             for l in (x.get("levels") or []):
@@ -287,9 +301,36 @@ def test_search_hits_are_explainable(conn):
                 parts.append(hw.get("en", "") + hw.get("ja", ""))
         return N(" ".join(str(p) for p in parts))
 
-    for q in ("憤怒", "エナジーシールド", "クリティカル", "回避"):
+    for q in ("憤怒", "エナジーシールド", "クリティカル", "回避", "メイス"):
         for d in S.search(conn, q):
             assert N(q) in visible(d), (q, d["kind"], d["name_en"])
+
+
+def test_gem_weapon_requirements(conn, raw):
+    """ジェムの装備条件（片手メイス / 両手メイス）が引けて、検索にも当たる."""
+    from parsers import normalize_for_search as N
+
+    n = raw.execute(
+        "SELECT COUNT(*) FROM gems WHERE weapon_restrictions != ''").fetchone()[0]
+    assert n >= 150, n
+
+    sunder = next(d for d in S.search(conn, "kind:gem サンダー")
+                  if d["meta"]["gem_id"].endswith("NewSunder")
+                  or d["name_en"] == "Sunder")
+    assert sunder["meta"]["weapon_restrictions"] == ["One Hand Mace", "Two Hand Mace"]
+    assert sunder["meta"]["weapon_ja"] == ["片手メイス", "両手メイス"]
+
+    # 「メイス」で装備条件からも引ける
+    res = S.search(conn, "メイス kind:gem")
+    assert len(res) >= 40, len(res)
+    assert any(d["name_en"] == "Sunder" for d in res)
+    for d in res:
+        own = N(" ".join([d["name_en"], d["name_ja"]] +
+                         (d["meta"].get("weapon_ja") or []) +
+                         (d["meta"].get("weapon_en") or []) +
+                         [str(d["meta"].get(k, "")) for k in
+                          ("summary_en", "summary_ja", "desc_en", "desc_ja")]))
+        assert N("メイス") in own or N("mace") in own, d["name_en"]
 
 
 def test_icons_present(raw):
